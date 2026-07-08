@@ -238,7 +238,6 @@ namespace CombatManager.Ai
         internal float SimulationTime { get; private set; }
 
         internal bool Playing { get; set; } = true;
-        internal bool ShowInspector { get; set; } = true;
         internal bool ShowTrail { get; set; } = true;
         internal bool ShowDesiredTrail { get; set; } = true;
         internal bool ShowRawSteer { get; set; } = true;

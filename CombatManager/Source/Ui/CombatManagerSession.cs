@@ -6,16 +6,12 @@ namespace CombatManager.Ui
 {
     internal sealed class CombatManagerSession
     {
-        private const float MinWindowWidth = 720f;
-        private const float MinWindowHeight = 480f;
         private const float SimulationStepSeconds = 0.5f;
 
         private readonly AiSimulationState _state = new AiSimulationState();
-        private Rect _window;
-        private bool _windowInitialised;
         private bool _active;
-        private bool _resizing;
-        private Vector2 _inspectorScroll;
+        private Vector2 _blueScroll;
+        private Vector2 _redScroll;
 
         internal bool Active => _active;
 
@@ -44,28 +40,7 @@ namespace CombatManager.Ui
                 return;
 
             CombatManagerTheme.Ensure();
-            EnsureWindow();
-            ClampWindow();
-            _window = GUI.Window(483210, _window, DrawWindow, "CombatManager AI Duel Sandbox", CombatManagerTheme.Window);
-        }
-
-        private void EnsureWindow()
-        {
-            if (_windowInitialised)
-                return;
-
-            float width = Mathf.Clamp(Screen.width * 0.8f, MinWindowWidth, Mathf.Max(MinWindowWidth, Screen.width - 40f));
-            float height = Mathf.Clamp(Screen.height * 0.8f, MinWindowHeight, Mathf.Max(MinWindowHeight, Screen.height - 40f));
-            _window = new Rect((Screen.width - width) * 0.5f, (Screen.height - height) * 0.5f, width, height);
-            _windowInitialised = true;
-        }
-
-        private void ClampWindow()
-        {
-            _window.width = Mathf.Clamp(_window.width, MinWindowWidth, Mathf.Max(MinWindowWidth, Screen.width - 40f));
-            _window.height = Mathf.Clamp(_window.height, MinWindowHeight, Mathf.Max(MinWindowHeight, Screen.height - 40f));
-            _window.x = Mathf.Clamp(_window.x, 0f, Mathf.Max(0f, Screen.width - _window.width));
-            _window.y = Mathf.Clamp(_window.y, 0f, Mathf.Max(0f, Screen.height - _window.height));
+            DrawEditor(CombatManagerEditorLayout.For(Screen.width, Screen.height));
         }
 
         private static MainConstruct GetFocusedConstruct()
@@ -80,106 +55,106 @@ namespace CombatManager.Ui
             }
         }
 
-        private void DrawWindow(int id)
+        private void DrawEditor(CombatManagerEditorLayout layout)
         {
-            DrawWindowBackdrop();
-            GUI.Label(new Rect(0f, 2f, _window.width, 20f), "CombatManager AI Duel Sandbox", CombatManagerTheme.Title);
+            DrawFullscreenBackdrop(layout.Root);
 
-            Rect client = new Rect(10f, 26f, _window.width - 20f, _window.height - 36f);
-            Rect toolbar = new Rect(client.x, client.y, client.width, 30f);
-            Rect body = new Rect(client.x, toolbar.yMax + 8f, client.width, client.height - toolbar.height - 8f);
-
-            DrawToolbar(toolbar);
-            DrawBody(body);
-            DrawResizeHandle();
-            GUI.DragWindow(new Rect(0f, 0f, _window.width - 26f, 22f));
+            AiDuelFrame frame = _state.BuildDuelFrame();
+            DrawToolbar(layout.Toolbar);
+            DrawGlobalWarning(layout.Warning);
+            DrawSidePanel(layout.BluePanel, _state.Blue, frame.Blue, "Blue / Player", "Blue", ref _blueScroll, includeImport: true);
+            CombatManagerGridRenderer.Draw(layout.Grid, _state);
+            DrawSidePanel(layout.RedPanel, _state.Red, frame.Red, "Red / Enemy", "Red", ref _redScroll, includeImport: false);
         }
 
         private void DrawToolbar(Rect rect)
         {
-            GUILayout.BeginArea(rect);
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("Symmetric duel", CombatManagerTheme.Header, GUILayout.Width(190f));
+            GUILayout.BeginArea(rect, CombatManagerTheme.Panel);
+            GUILayout.BeginVertical();
 
-            if (GUILayout.Button(_state.Playing ? "Pause" : "Play", _state.Playing ? CombatManagerTheme.ActiveButton : CombatManagerTheme.Button, GUILayout.Width(74f)))
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("CombatManager Duel Editor", CombatManagerTheme.Header, GUILayout.Width(176f));
+            ScenarioButton("Ship Duel", AiScenarioPreset.ShipDuel, GUILayout.Width(82f));
+            ScenarioButton("Broadside", AiScenarioPreset.BroadsideDuel, GUILayout.Width(82f));
+            ScenarioButton("Hover", AiScenarioPreset.HoverDuel, GUILayout.Width(68f));
+            ScenarioButton("Planes", AiScenarioPreset.PlaneIntercept, GUILayout.Width(68f));
+            GUILayout.Space(8f);
+
+            if (GUILayout.Button(_state.Playing ? "Pause" : "Play", _state.Playing ? CombatManagerTheme.ActiveButton : CombatManagerTheme.Button, GUILayout.Width(64f)))
                 _state.Playing = !_state.Playing;
 
-            if (GUILayout.Button("Step", CombatManagerTheme.Button, GUILayout.Width(62f)))
+            if (GUILayout.Button("Step", CombatManagerTheme.Button, GUILayout.Width(54f)))
             {
                 _state.Playing = false;
                 _state.Step(SimulationStepSeconds);
             }
 
-            if (GUILayout.Button("Reset", CombatManagerTheme.Button, GUILayout.Width(62f)))
+            if (GUILayout.Button("Reset", CombatManagerTheme.Button, GUILayout.Width(60f)))
                 _state.ResetScenario();
 
-            if (GUILayout.Button("Import Blue AI", CombatManagerTheme.Button, GUILayout.Width(128f)))
-            {
-                AiSimulationImporter.TryImport(GetFocusedConstruct(), _state, out string message);
-                _state.ImportStatus = message;
-                _state.ShowImportDetails = true;
-            }
-
             GUILayout.FlexibleSpace();
-            if (GUILayout.Button(_state.ShowInspector ? "Hide Inspector" : "Show Inspector", CombatManagerTheme.Button, GUILayout.Width(112f)))
-                _state.ShowInspector = !_state.ShowInspector;
-            GUILayout.Label("Ctrl+Shift+C toggles", CombatManagerTheme.Mini, GUILayout.Width(132f));
-            if (GUILayout.Button("Close", CombatManagerTheme.Button, GUILayout.Width(64f)))
+            GUILayout.Label("Ctrl+Shift+C toggles", CombatManagerTheme.Mini, GUILayout.Width(126f));
+            if (GUILayout.Button("Close", CombatManagerTheme.Button, GUILayout.Width(62f)))
                 Close();
             GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("View", CombatManagerTheme.Mini, GUILayout.Width(36f));
+            if (GUILayout.Button("Fit Duel", CombatManagerTheme.Button, GUILayout.Width(68f)))
+                _state.GridZoom = 1f;
+            _state.GridZoom = ToolbarSlider("Zoom", _state.GridZoom, 0.5f, 3f, "x", 142f);
+            _state.PlaybackSpeed = ToolbarSlider("Speed", _state.PlaybackSpeed, 0.1f, 5f, "x", 142f);
+            _state.ShowTrail = ToggleButton("Trails", _state.ShowTrail, GUILayout.Width(72f));
+            _state.ShowDesiredTrail = ToggleButton("AI Trails", _state.ShowDesiredTrail, GUILayout.Width(76f));
+            _state.ShowRawSteer = ToggleButton("Raw Steer", _state.ShowRawSteer, GUILayout.Width(82f));
+            _state.ShowMotionPoint = ToggleButton("Motion", _state.ShowMotionPoint, GUILayout.Width(68f));
+            _state.ShowLegend = ToggleButton("Legend", _state.ShowLegend, GUILayout.Width(68f));
+            GUILayout.FlexibleSpace();
+            GUILayout.EndHorizontal();
+
+            GUILayout.EndVertical();
             GUILayout.EndArea();
         }
 
-        private void DrawBody(Rect rect)
+        private static float ToolbarSlider(string label, float value, float min, float max, string suffix, float sliderWidth)
         {
-            float inspectorWidth = _state.ShowInspector ? Mathf.Min(360f, rect.width * 0.45f) : 0f;
-            Rect inspector = new Rect(rect.x, rect.y, inspectorWidth, rect.height);
-            Rect gridArea = _state.ShowInspector
-                ? new Rect(inspector.xMax + 8f, rect.y, rect.width - inspectorWidth - 8f, rect.height)
-                : rect;
-
-            if (_state.ShowInspector)
-                DrawInspector(inspector);
-
-            CombatManagerGridRenderer.Draw(gridArea, _state);
+            GUILayout.Label(label, CombatManagerTheme.Mini, GUILayout.Width(40f));
+            float adjusted = GUILayout.HorizontalSlider(value, min, max, GUILayout.Width(sliderWidth));
+            GUILayout.Label($"{adjusted:0.#}{suffix}", CombatManagerTheme.Mini, GUILayout.Width(40f));
+            return adjusted;
         }
 
-        private void DrawInspector(Rect rect)
+        private static void DrawGlobalWarning(Rect rect)
+        {
+            GUI.Box(rect, GUIContent.none, CombatManagerTheme.Panel);
+            GUI.Label(
+                new Rect(rect.x + 8f, rect.y + 4f, rect.width - 16f, 18f),
+                "Read-only duel simulation: behaviour intent is mirrored from researched AI cards; movement-card output is still an approximation of FTD physics/PID/pathfinding.",
+                CombatManagerTheme.Warning);
+        }
+
+        private void DrawSidePanel(Rect rect, AiSimEntity entity, AiSimulationFrame frame, string title, string sideName, ref Vector2 scroll, bool includeImport)
         {
             GUILayout.BeginArea(rect, CombatManagerTheme.Panel);
-            _inspectorScroll = GUILayout.BeginScrollView(_inspectorScroll);
+            scroll = GUILayout.BeginScrollView(scroll);
 
-            DrawScenarioControls();
+            GUILayout.Label(title, CombatManagerTheme.Header);
+            DrawEntityMainframeControls(entity, $"{sideName} Mainframe");
             GUILayout.Space(8f);
-            DrawEntityControls(_state.Blue, "Blue Mainframe");
+            DrawEntityMovementControls(entity, $"{sideName} Movement");
             GUILayout.Space(8f);
-            DrawEntityControls(_state.Red, "Red Mainframe");
-            GUILayout.Space(8f);
-            DrawVisualControls();
-            GUILayout.Space(8f);
-            DrawStatusAndWarnings();
-            GUILayout.Space(8f);
-            DrawImportDrawer();
+            DrawEntityStatus(frame, $"{sideName} Status");
+            if (includeImport)
+            {
+                GUILayout.Space(8f);
+                DrawImportDrawer();
+            }
 
             GUILayout.EndScrollView();
             GUILayout.EndArea();
         }
 
-        private void DrawScenarioControls()
-        {
-            GUILayout.Label("Scenario", CombatManagerTheme.Header);
-            GUILayout.BeginHorizontal();
-            ScenarioButton("Ship Duel", AiScenarioPreset.ShipDuel);
-            ScenarioButton("Broadside", AiScenarioPreset.BroadsideDuel);
-            GUILayout.EndHorizontal();
-            GUILayout.BeginHorizontal();
-            ScenarioButton("Hover Duel", AiScenarioPreset.HoverDuel);
-            ScenarioButton("Plane Intercept", AiScenarioPreset.PlaneIntercept);
-            GUILayout.EndHorizontal();
-            _state.PlaybackSpeed = SliderRow("Playback speed", _state.PlaybackSpeed, 0.1f, 5f, "x");
-        }
-
-        private void DrawEntityControls(AiSimEntity entity, string header)
+        private void DrawEntityMainframeControls(AiSimEntity entity, string header)
         {
             GUILayout.Label(header, CombatManagerTheme.Header);
             GUILayout.Label($"{AiSimulationState.PresetName(entity.Preset)} | {AiSimulationState.CraftProfileName(entity.CraftProfile)} | {AiSimulationState.CraftMovementModelName(entity.CraftMovementModel)}", CombatManagerTheme.Mini);
@@ -201,7 +176,7 @@ namespace CombatManager.Ui
             EntitySideButton(entity, "Right", AiSimulationSide.Right);
             GUILayout.EndHorizontal();
 
-            float radius = SliderRow("Distance / radius", entity.Radius, 25f, 1500f, "m");
+            float radius = SliderRow("Distance/radius", entity.Radius, 25f, 1500f, "m");
             if (!Mathf.Approximately(radius, entity.Radius))
             {
                 entity.Radius = radius;
@@ -213,6 +188,11 @@ namespace CombatManager.Ui
                 entity.BroadsideAngle = SliderRow("Broadside angle", entity.BroadsideAngle, 10f, 170f, "deg");
             if (entity.Preset == AiSimulationPreset.NavalBroadside)
                 entity.BroadsideOuterRadius = SliderRow("Leave range", entity.BroadsideOuterRadius, entity.Radius + 20f, 2500f, "m");
+        }
+
+        private void DrawEntityMovementControls(AiSimEntity entity, string header)
+        {
+            GUILayout.Label(header, CombatManagerTheme.Header);
 
             GUILayout.Label("Craft profile", CombatManagerTheme.Mini);
             GUILayout.BeginHorizontal();
@@ -260,46 +240,25 @@ namespace CombatManager.Ui
                 entity.AirplaneBankingTurnAbove = SliderRow("Bank above", entity.AirplaneBankingTurnAbove, 0f, 90f, "deg");
                 entity.AirplaneBankingTurnRoll = SliderRow("Bank roll", entity.AirplaneBankingTurnRoll, 0f, 90f, "deg");
             }
+
+            if (GUILayout.Button("Reset Scenario", CombatManagerTheme.Button))
+                _state.ResetScenario();
         }
 
-        private void DrawVisualControls()
+        private static void DrawEntityStatus(AiSimulationFrame frame, string header)
         {
-            GUILayout.Label("Visuals", CombatManagerTheme.Header);
-            _state.GridZoom = SliderRow("Zoom", _state.GridZoom, 0.5f, 3f, "x");
-            GUILayout.BeginHorizontal();
-            if (GUILayout.Button("Fit Duel", CombatManagerTheme.Button))
-                _state.GridZoom = 1f;
-            _state.ShowTrail = ToggleButton("Trails", _state.ShowTrail);
-            _state.ShowDesiredTrail = ToggleButton("AI Trails", _state.ShowDesiredTrail);
-            GUILayout.EndHorizontal();
-            GUILayout.BeginHorizontal();
-            _state.ShowRawSteer = ToggleButton("Raw Steer", _state.ShowRawSteer);
-            _state.ShowMotionPoint = ToggleButton("Motion Point", _state.ShowMotionPoint);
-            _state.ShowLegend = ToggleButton("Legend", _state.ShowLegend);
-            GUILayout.EndHorizontal();
-        }
-
-        private void DrawStatusAndWarnings()
-        {
-            GUILayout.Label("Warnings", CombatManagerTheme.Header);
-            AiDuelFrame frame = _state.BuildDuelFrame();
-            DrawFrameStatus(frame.Blue);
-            DrawFrameStatus(frame.Red);
-            GUILayout.Label("Simulation is read-only and approximates movement-card PID, propulsion, pathfinding, terrain, water, and firing-angle internals.", CombatManagerTheme.Warning);
-        }
-
-        private static void DrawFrameStatus(AiSimulationFrame frame)
-        {
-            GUILayout.Label($"{frame.EntityName}: {frame.Kind} | {frame.AiState}", CombatManagerTheme.BodyWrap);
-            GUILayout.Label($"range {frame.GroundRange:0.#}m | azimuth {frame.Azimuth:0.#} deg | {frame.CraftMovementModel}", CombatManagerTheme.Mini);
+            GUILayout.Label(header, CombatManagerTheme.Header);
+            GUILayout.Label($"{frame.Kind} | {frame.AiState}", CombatManagerTheme.BodyWrap);
+            GUILayout.Label($"range {frame.GroundRange:0.#}m | azimuth {frame.Azimuth:0.#} deg", CombatManagerTheme.BodyWrap);
+            GUILayout.Label($"{frame.CraftMovementModel} | speed {frame.CraftVelocity.magnitude:0.#}m/s", CombatManagerTheme.BodyWrap);
             if (!string.IsNullOrWhiteSpace(frame.ApproximationNote))
                 GUILayout.Label(frame.ApproximationNote, CombatManagerTheme.Mini);
         }
 
-        private void ScenarioButton(string label, AiScenarioPreset preset)
+        private void ScenarioButton(string label, AiScenarioPreset preset, params GUILayoutOption[] options)
         {
             GUIStyle style = _state.ScenarioPreset == preset ? CombatManagerTheme.ActiveButton : CombatManagerTheme.Button;
-            if (GUILayout.Button(label, style))
+            if (GUILayout.Button(label, style, options))
                 _state.ApplyScenarioPreset(preset);
         }
 
@@ -345,7 +304,7 @@ namespace CombatManager.Ui
 
         private void DrawImportDrawer()
         {
-            GUILayout.Label("Import", CombatManagerTheme.Header);
+            GUILayout.Label("Import Blue AI", CombatManagerTheme.Header);
             GUILayout.Label("Import seeds Blue only. Red remains manually configured.", CombatManagerTheme.Mini);
             LabelPair("Mainframe", _state.ImportedMainframe);
             LabelPair("Behaviour", _state.ImportedBehaviour);
@@ -384,7 +343,7 @@ namespace CombatManager.Ui
                 foreach (AiImportCandidate candidate in _state.ImportCandidates)
                 {
                     GUIStyle style = _state.SelectedImportIndex == candidate.Index ? CombatManagerTheme.SelectedRow : CombatManagerTheme.Row;
-                    string prefix = candidate.Supported ? "" : "[unsupported] ";
+                    string prefix = candidate.Supported ? string.Empty : "[unsupported] ";
                     if (GUILayout.Button($"{prefix}{candidate.Index}: {candidate.MainframeName}  P{candidate.Priority}", style))
                         _state.SelectedImportIndex = candidate.Index;
                     GUILayout.Label($"{candidate.Summary} | move {candidate.MovementType} | fire {candidate.FiringType}", candidate.Supported ? CombatManagerTheme.Mini : CombatManagerTheme.Warning);
@@ -419,48 +378,25 @@ namespace CombatManager.Ui
         private static float SliderRow(string label, float value, float min, float max, string suffix)
         {
             GUILayout.BeginHorizontal();
-            GUILayout.Label(label, CombatManagerTheme.Body, GUILayout.Width(118f));
-            float adjusted = GUILayout.HorizontalSlider(value, min, max, GUILayout.MinWidth(80f));
-            GUILayout.Label($"{adjusted:0.#}{suffix}", CombatManagerTheme.Mini, GUILayout.Width(62f));
+            GUILayout.Label(label, CombatManagerTheme.Body, GUILayout.Width(102f));
+            float adjusted = GUILayout.HorizontalSlider(value, min, max, GUILayout.MinWidth(60f));
+            GUILayout.Label($"{adjusted:0.#}{suffix}", CombatManagerTheme.Mini, GUILayout.Width(54f));
             GUILayout.EndHorizontal();
             return adjusted;
         }
 
-        private static bool ToggleButton(string label, bool value)
+        private static bool ToggleButton(string label, bool value, params GUILayoutOption[] options)
         {
             GUIStyle style = value ? CombatManagerTheme.ActiveButton : CombatManagerTheme.Button;
-            return GUILayout.Button(label, style) ? !value : value;
+            return GUILayout.Button(label, style, options) ? !value : value;
         }
 
-        private void DrawWindowBackdrop()
+        private static void DrawFullscreenBackdrop(Rect rect)
         {
             Color old = GUI.color;
             GUI.color = Color.white;
-            GUI.DrawTexture(new Rect(0f, 0f, _window.width, _window.height), CombatManagerTheme.WindowTexture);
+            GUI.DrawTexture(rect, CombatManagerTheme.WindowTexture);
             GUI.color = old;
-        }
-
-        private void DrawResizeHandle()
-        {
-            Rect handle = new Rect(_window.width - 22f, _window.height - 22f, 18f, 18f);
-            GUI.Label(handle, "///", CombatManagerTheme.Mini);
-
-            Event current = Event.current;
-            if (current.type == EventType.MouseDown && current.button == 0 && handle.Contains(current.mousePosition))
-            {
-                _resizing = true;
-                current.Use();
-            }
-
-            if (_resizing && current.type == EventType.MouseDrag)
-            {
-                _window.width = Mathf.Clamp(current.mousePosition.x + 8f, MinWindowWidth, Mathf.Max(MinWindowWidth, Screen.width - 40f));
-                _window.height = Mathf.Clamp(current.mousePosition.y + 8f, MinWindowHeight, Mathf.Max(MinWindowHeight, Screen.height - 40f));
-                current.Use();
-            }
-
-            if (current.rawType == EventType.MouseUp)
-                _resizing = false;
         }
 
         private static void LabelPair(string label, string value)

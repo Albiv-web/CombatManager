@@ -27,3 +27,9 @@
 - Added mainframe-like behaviour and manoeuvre settings for both simulated entities.
 - Added shared ship/tank, hover, six-axis, and airplane manoeuvre simulation used by both sides.
 - Kept import one-shot and Blue-only; Red remains manually configured inside the sandbox.
+
+0.1.6
+- Reworked the duel sandbox into a fullscreen editor layout.
+- Moved Blue/player controls to a fixed left panel and Red/enemy controls to a fixed right panel.
+- Moved scenario, playback, zoom, fit, and overlay toggles into a compact top toolbar.
+- Added independent side-panel scrolling and layout verification for 1280x720 and wide screens.

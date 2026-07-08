@@ -1,5 +1,6 @@
 using System;
 using CombatManager.Ai;
+using CombatManager.Ui;
 using UnityEngine;
 
 namespace CombatManager.Verification
@@ -25,6 +26,9 @@ namespace CombatManager.Verification
                 ScenarioPresetsApplyBothMainframes();
                 BuildDuelFrameDoesNotMutateNavalState();
                 BlueImportNullDoesNotChangeRed();
+                FullscreenLayoutKeepsPanelsInsideScreen();
+                FullscreenLayoutKeepsGraphPositiveAt1280();
+                FullscreenLayoutAssignsSeparateColumns();
                 Console.WriteLine("CombatManager verification passed.");
                 return 0;
             }
@@ -224,6 +228,37 @@ namespace CombatManager.Verification
 
             if (state.Red.Preset != redPreset || state.Red.CraftMovementModel != redMovement)
                 throw new InvalidOperationException("null import changed Red configuration");
+        }
+
+        private static void FullscreenLayoutKeepsPanelsInsideScreen()
+        {
+            CombatManagerEditorLayout layout = CombatManagerEditorLayout.For(1366f, 768f);
+            if (layout.BluePanel.x < layout.Root.x || layout.BluePanel.y < layout.Root.y)
+                throw new InvalidOperationException("blue panel escaped the screen");
+            if (layout.RedPanel.xMax > layout.Root.xMax || layout.RedPanel.yMax > layout.Root.yMax)
+                throw new InvalidOperationException("red panel escaped the screen");
+            if (layout.Grid.y != layout.BluePanel.y || layout.Grid.height != layout.RedPanel.height)
+                throw new InvalidOperationException("graph and side panels are not aligned");
+        }
+
+        private static void FullscreenLayoutKeepsGraphPositiveAt1280()
+        {
+            CombatManagerEditorLayout layout = CombatManagerEditorLayout.For(1280f, 720f);
+            AssertNear(260f, layout.SidePanelWidth, "1280 side panel width");
+            if (layout.Grid.width <= 420f)
+                throw new InvalidOperationException($"1280 graph width too small: {layout.Grid.width}");
+            if (layout.Grid.height <= 500f)
+                throw new InvalidOperationException($"1280 graph height too small: {layout.Grid.height}");
+        }
+
+        private static void FullscreenLayoutAssignsSeparateColumns()
+        {
+            CombatManagerEditorLayout layout = CombatManagerEditorLayout.For(1920f, 1080f);
+            AssertNear(320f, layout.SidePanelWidth, "wide side panel width");
+            if (!(layout.BluePanel.xMax < layout.Grid.x && layout.Grid.xMax < layout.RedPanel.x))
+                throw new InvalidOperationException("Blue, graph, and Red columns overlap or are out of order");
+            if (Math.Abs(layout.BluePanel.width - layout.RedPanel.width) > 0.001f)
+                throw new InvalidOperationException("side panel widths diverged");
         }
 
         private static void ConfigureSymmetricPointAt(AiSimEntity entity)

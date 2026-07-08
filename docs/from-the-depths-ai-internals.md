@@ -492,6 +492,17 @@ V1.5 turns that into a two-sided duel sandbox:
   manoeuvre turns intent into requests. We are not claiming exact vanilla
   physics/PID/pathfinding yet.
 
+V1.6 is a layout milestone on top of the same simulation model:
+
+- The sandbox now opens as a fullscreen editor surface instead of a floating
+  resizable window.
+- Blue/player mainframe and movement controls live in the fixed left panel.
+- Red/enemy mainframe and movement controls live in the fixed right panel.
+- Scenario, playback, zoom, fit, and overlay toggles live in the top toolbar so
+  the Red-centered graph can consume the entire center of the screen.
+- No new live synchronization or write path was introduced; Blue import remains
+  one-shot and Red remains manually configured.
+
 ## Next Research Targets
 
 To improve fidelity, decompile and summarize these next:
