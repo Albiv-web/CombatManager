@@ -61,3 +61,10 @@ The V1.3 overlay is read-only toward the real game. It shows:
 
 Imported AI settings are copied once into the sandbox. The mod does not keep
 scanning the craft, change targets, or write card/mainframe values.
+
+## Research Notes
+
+- [From The Depths AI internals](docs/from-the-depths-ai-internals.md)
+  summarizes how mainframes, cards, behaviours, manoeuvres, target snapshots,
+  and control requests work. Use it as the source map for future simulator
+  fidelity work.
