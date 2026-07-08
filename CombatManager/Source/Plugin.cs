@@ -10,7 +10,7 @@ namespace CombatManager
     public sealed class Plugin : GamePlugin_PostLoad
     {
         public string name => "CombatManager";
-        public Version version => new Version(0, 1, 1, 0);
+        public Version version => new Version(0, 1, 2, 0);
 
         public void OnLoad()
         {

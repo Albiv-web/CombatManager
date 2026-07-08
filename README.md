@@ -1,8 +1,8 @@
 # CombatManager
 
 CombatManager is a From The Depths mod based on the working structure of
-EndlessShapes Unlimited. V1.1 adds a standalone AI movement sandbox for
-previewing what common combat behaviours look like around a target.
+EndlessShapes Unlimited. V1.2 adds a polished standalone AI movement sandbox
+for previewing what common combat behaviours look like around a target.
 
 - `plugin.json` tells From The Depths which assembly to load.
 - `CombatManager.dll` contains a `GamePlugin_PostLoad` implementation and the
@@ -46,13 +46,14 @@ C:\Users\<you>\Documents\From The Depths\Mods\CombatManager
 Press `Ctrl+Shift+C` to open/close the sandbox. The hotkey is guarded against
 text input, but it no longer depends on a focused craft or build mode.
 
-The V1.1 overlay is read-only toward the real game. It shows:
+The V1.2 overlay is read-only toward the real game. It shows:
 
-- A large target-centered top-down X/Z grid.
+- An opaque target-centered top-down X/Z tactical grid.
 - Circle, point-at, and broadside behaviour presets.
 - Simulated craft marker movement, heading, tangent travel direction, range
-  ring, range label, and ghost trail.
-- Playback controls for play, pause, step, and reset.
+  ring, range labels, ghost trail, and optional legend.
+- Playback controls for play, pause, step, reset, zoom, fit orbit, and trail
+  visibility.
 - Optional one-shot `Import Current AI` seeding from the focused craft.
 
 Imported AI settings are copied once into the sandbox. The mod does not keep

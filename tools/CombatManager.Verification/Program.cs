@@ -17,6 +17,9 @@ namespace CombatManager.Verification
                 CircleStepAdvancesBySpeedOverRadius();
                 TargetProjectionStaysCentered();
                 OrbitRingFitsResizeBounds();
+                RectangularProjectionKeepsTargetCentered();
+                ZoomChangesMetersPerPixelPredictably();
+                SideModesProduceStableFrames();
                 Console.WriteLine("CombatManager verification passed.");
                 return 0;
             }
@@ -101,6 +104,56 @@ namespace CombatManager.Verification
 
             if (screenDistance > Mathf.Min(rect.width, rect.height) * 0.5f)
                 throw new InvalidOperationException("orbit ring exceeds the shortest grid dimension");
+        }
+
+        private static void RectangularProjectionKeepsTargetCentered()
+        {
+            var state = new AiSimulationState { Radius = 350f };
+            Rect rect = new Rect(25f, 40f, 900f, 420f);
+            AiSimulationGridProjection projection = AiSimulationGridProjection.For(rect, state);
+            Vector2 center = projection.WorldToScreen(Vector3.zero);
+
+            AssertNear(rect.center.x, center.x, "rectangular target center x");
+            AssertNear(rect.center.y, center.y, "rectangular target center y");
+
+            if (projection.VisibleHalfWidth <= projection.VisibleHalfHeight)
+                throw new InvalidOperationException("rectangular projection did not expose a wider horizontal world span");
+        }
+
+        private static void ZoomChangesMetersPerPixelPredictably()
+        {
+            var state = new AiSimulationState { Radius = 200f, GridZoom = 1f };
+            Rect rect = new Rect(0f, 0f, 800f, 500f);
+            float baseMetersPerPixel = AiSimulationGridProjection.For(rect, state).MetersPerPixel;
+
+            state.GridZoom = 2f;
+            float zoomedMetersPerPixel = AiSimulationGridProjection.For(rect, state).MetersPerPixel;
+
+            AssertNear(baseMetersPerPixel * 0.5f, zoomedMetersPerPixel, "zoom m/px");
+        }
+
+        private static void SideModesProduceStableFrames()
+        {
+            AssertStableSide(AiSimulationSide.Both, -1f);
+            AssertStableSide(AiSimulationSide.Left, 1f);
+            AssertStableSide(AiSimulationSide.Right, -1f);
+        }
+
+        private static void AssertStableSide(AiSimulationSide side, float expectedDirection)
+        {
+            var state = new AiSimulationState
+            {
+                Preset = AiSimulationPreset.Circle,
+                Side = side,
+                Radius = 200f
+            };
+            AiSimulationFrame frame = state.BuildFrame();
+
+            AssertNear(expectedDirection, state.OrbitDirection(), $"{side} orbit direction");
+            AssertNear(200f, PlanarMath.GroundDistance(Vector3.zero, frame.CraftPosition), $"{side} craft radius");
+
+            if (float.IsNaN(frame.Heading.x) || float.IsNaN(frame.Heading.z))
+                throw new InvalidOperationException($"{side} produced a NaN heading");
         }
 
         private static void AssertNear(float expected, float actual, string name)

@@ -24,14 +24,18 @@ namespace CombatManager.Ai
         private const int MaxTrailPoints = 180;
 
         internal AiSimulationPreset Preset { get; set; } = AiSimulationPreset.Circle;
-        internal AiSimulationSide Side { get; set; } = AiSimulationSide.Right;
+        internal AiSimulationSide Side { get; set; } = AiSimulationSide.Both;
         internal float Radius { get; set; } = 200f;
         internal float CraftSpeed { get; set; } = 30f;
         internal float PlaybackSpeed { get; set; } = 1f;
         internal float BroadsideAngle { get; set; } = 75f;
+        internal float GridZoom { get; set; } = 1f;
         internal float OrbitAngleDegrees { get; private set; }
         internal bool Playing { get; set; } = true;
         internal bool ShowInspector { get; set; } = true;
+        internal bool ShowTrail { get; set; } = true;
+        internal bool ShowLegend { get; set; } = true;
+        internal bool ShowImportDetails { get; set; }
         internal string ImportStatus { get; set; } = "Standalone sandbox. Import is optional.";
         internal string ImportedBehaviour { get; set; }
         internal string ImportedMainframe { get; set; }
@@ -168,17 +172,23 @@ namespace CombatManager.Ai
     {
         internal Rect Rect;
         internal float VisibleRadius;
+        internal float VisibleHalfWidth;
+        internal float VisibleHalfHeight;
         internal float MetersPerPixel;
 
         internal static AiSimulationGridProjection For(Rect rect, AiSimulationState state)
         {
-            float radius = Mathf.Max(120f, state.Radius * 1.45f);
+            float zoom = Mathf.Clamp(state.GridZoom, 0.5f, 3f);
+            float radius = Mathf.Max(120f, state.Radius * 1.25f) / zoom;
             float shortestSide = Mathf.Max(1f, Mathf.Min(rect.width, rect.height));
+            float metersPerPixel = radius * 2f / shortestSide;
             return new AiSimulationGridProjection
             {
                 Rect = rect,
                 VisibleRadius = radius,
-                MetersPerPixel = radius * 2f / shortestSide
+                VisibleHalfWidth = rect.width * metersPerPixel * 0.5f,
+                VisibleHalfHeight = rect.height * metersPerPixel * 0.5f,
+                MetersPerPixel = metersPerPixel
             };
         }
 

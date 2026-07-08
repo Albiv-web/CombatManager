@@ -5,59 +5,85 @@ namespace CombatManager.Ui
 {
     internal static class CombatManagerGridRenderer
     {
+        private static readonly Color GridMinor = new Color(0.08f, 0.28f, 0.32f, 0.7f);
+        private static readonly Color GridMajor = new Color(0.25f, 0.78f, 0.86f, 0.9f);
+        private static readonly Color Orbit = new Color(1f, 0.86f, 0.22f, 0.95f);
+        private static readonly Color Radial = new Color(0.6f, 0.9f, 1f, 0.45f);
+        private static readonly Color Alternate = new Color(0.55f, 0.85f, 1f, 0.34f);
+
         internal static void Draw(Rect rect, AiSimulationState state)
         {
             CombatManagerTheme.Ensure();
             GUI.Box(rect, GUIContent.none, CombatManagerTheme.Panel);
 
-            Rect grid = new Rect(rect.x + 8f, rect.y + 8f, rect.width - 16f, rect.height - 16f);
+            GUI.BeginGroup(rect);
+            Rect grid = new Rect(8f, 8f, rect.width - 16f, rect.height - 16f);
             AiSimulationGridProjection projection = AiSimulationGridProjection.For(grid, state);
             AiSimulationFrame frame = state.BuildFrame();
 
             DrawGrid(projection);
-            DrawCircle(projection, Vector3.zero, frame.Radius, new Color(0.9f, 0.78f, 0.18f, 0.55f));
-            DrawTrail(projection, state);
+            DrawOrbit(projection, frame.Radius);
+
+            if (state.ShowTrail)
+                DrawTrail(projection, state);
 
             Vector2 target = projection.WorldToScreen(Vector3.zero);
-            DrawDiamond(target, 8f, CombatManagerTheme.Target);
-            DrawLabel(target + new Vector2(10f, 8f), "target origin");
+            DrawTargetReticle(target);
+            DrawLabel(target + new Vector2(12f, 8f), "target origin");
 
             Vector2 craft = projection.WorldToScreen(frame.CraftPosition);
-            DrawLine(craft, target, new Color(0.75f, 0.95f, 1f, 0.32f), 1f);
-            DrawSquare(craft, 7f, CombatManagerTheme.Craft);
-            DrawArrow(craft, projection.DirectionToScreen(frame.Heading, 44f), CombatManagerTheme.Craft, 3f);
+            DrawLine(craft, target, Radial, 1f);
+            DrawShip(craft, projection.DirectionToScreen(frame.Heading, 1f), CombatManagerTheme.Craft);
+            DrawArrow(craft, projection.DirectionToScreen(frame.Heading, 48f), CombatManagerTheme.Craft, 3f);
 
             if (frame.DesiredTravel.sqrMagnitude > 0.001f)
-                DrawArrow(craft + new Vector2(0f, 17f), projection.DirectionToScreen(frame.DesiredTravel, 40f), CombatManagerTheme.Intent, 2f);
+            {
+                Vector2 travel = projection.DirectionToScreen(frame.DesiredTravel, 44f);
+                Vector2 offset = new Vector2(-travel.y, travel.x).normalized * 12f;
+                DrawArrow(craft + offset, travel, CombatManagerTheme.Intent, 2f);
 
-            DrawLabel(craft + new Vector2(10f, -24f), $"craft {PlanarMath.GroundDistance(Vector3.zero, frame.CraftPosition):0.#}m");
+                if (state.Side == AiSimulationSide.Both && state.Preset == AiSimulationPreset.Circle)
+                    DrawArrow(craft - offset, -travel, Alternate, 2f);
+            }
+
+            DrawLabel(craft + new Vector2(12f, -26f), $"craft {PlanarMath.GroundDistance(Vector3.zero, frame.CraftPosition):0.#}m");
             DrawLabel(new Vector2(grid.x + 8f, grid.y + 8f), frame.Summary);
-            DrawLabel(new Vector2(grid.x + 8f, grid.yMax - 22f), $"{projection.MetersPerPixel:0.#} m/px  |  X/Z target-centered sandbox");
+            DrawLabel(new Vector2(grid.x + 8f, grid.yMax - 22f), $"{projection.MetersPerPixel:0.##} m/px  |  zoom {state.GridZoom:0.#}x");
 
             if (state.Preset == AiSimulationPreset.Broadside)
-                DrawLabel(craft + new Vector2(10f, -6f), $"broadside {frame.BroadsideAngle:0.#} deg");
+                DrawLabel(craft + new Vector2(12f, -8f), $"broadside {frame.BroadsideAngle:0.#} deg");
+
+            if (state.ShowLegend)
+                DrawLegend(grid);
+
+            DrawBorder(grid);
+            GUI.EndGroup();
         }
 
         private static void DrawGrid(AiSimulationGridProjection projection)
         {
             float step = NiceGridStep(projection.VisibleRadius / 4f);
-            int lineCount = Mathf.CeilToInt(projection.VisibleRadius / step);
+            int xLineCount = Mathf.CeilToInt(projection.VisibleHalfWidth / step);
+            int zLineCount = Mathf.CeilToInt(projection.VisibleHalfHeight / step);
 
-            for (int i = -lineCount; i <= lineCount; i++)
+            for (int i = -zLineCount; i <= zLineCount; i++)
             {
                 float offset = i * step;
-                Color color = i == 0
-                    ? new Color(0.32f, 0.55f, 0.6f, 0.82f)
-                    : new Color(0.18f, 0.34f, 0.38f, 0.48f);
-
+                Color color = i == 0 ? GridMajor : GridMinor;
                 DrawLine(
-                    projection.WorldToScreen(new Vector3(-projection.VisibleRadius, 0f, offset)),
-                    projection.WorldToScreen(new Vector3(projection.VisibleRadius, 0f, offset)),
+                    projection.WorldToScreen(new Vector3(-projection.VisibleHalfWidth, 0f, offset)),
+                    projection.WorldToScreen(new Vector3(projection.VisibleHalfWidth, 0f, offset)),
                     color,
                     i == 0 ? 2f : 1f);
+            }
+
+            for (int i = -xLineCount; i <= xLineCount; i++)
+            {
+                float offset = i * step;
+                Color color = i == 0 ? GridMajor : GridMinor;
                 DrawLine(
-                    projection.WorldToScreen(new Vector3(offset, 0f, -projection.VisibleRadius)),
-                    projection.WorldToScreen(new Vector3(offset, 0f, projection.VisibleRadius)),
+                    projection.WorldToScreen(new Vector3(offset, 0f, -projection.VisibleHalfHeight)),
+                    projection.WorldToScreen(new Vector3(offset, 0f, projection.VisibleHalfHeight)),
                     color,
                     i == 0 ? 2f : 1f);
             }
@@ -76,6 +102,23 @@ namespace CombatManager.Ui
             return 500f;
         }
 
+        private static void DrawOrbit(AiSimulationGridProjection projection, float radius)
+        {
+            DrawCircle(projection, Vector3.zero, radius, Orbit, 2f);
+
+            const int ticks = 16;
+            for (int i = 0; i < ticks; i++)
+            {
+                float angle = (Mathf.PI * 2f * i) / ticks;
+                Vector3 radial = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle));
+                Vector2 ring = projection.WorldToScreen(radial * radius);
+                DrawLine(ring, ring + projection.DirectionToScreen(radial, i % 4 == 0 ? 12f : 7f), Orbit, 2f);
+            }
+
+            DrawLabel(projection.WorldToScreen(Vector3.forward * radius) + new Vector2(8f, -18f), $"{radius:0.#}m");
+            DrawLabel(projection.WorldToScreen(Vector3.right * radius) + new Vector2(8f, -8f), $"{radius:0.#}m");
+        }
+
         private static void DrawTrail(AiSimulationGridProjection projection, AiSimulationState state)
         {
             if (state.Trail.Count < 2)
@@ -83,7 +126,7 @@ namespace CombatManager.Ui
 
             for (int i = 1; i < state.Trail.Count; i++)
             {
-                float alpha = Mathf.Lerp(0.08f, 0.5f, i / (float)state.Trail.Count);
+                float alpha = Mathf.Lerp(0.08f, 0.58f, i / (float)state.Trail.Count);
                 DrawLine(
                     projection.WorldToScreen(state.Trail[i - 1]),
                     projection.WorldToScreen(state.Trail[i]),
@@ -92,9 +135,9 @@ namespace CombatManager.Ui
             }
         }
 
-        private static void DrawCircle(AiSimulationGridProjection projection, Vector3 center, float radius, Color color)
+        private static void DrawCircle(AiSimulationGridProjection projection, Vector3 center, float radius, Color color, float width)
         {
-            const int segments = 96;
+            const int segments = 128;
             Vector2 previous = Vector2.zero;
             for (int i = 0; i <= segments; i++)
             {
@@ -102,9 +145,52 @@ namespace CombatManager.Ui
                 Vector3 point = center + new Vector3(Mathf.Cos(angle) * radius, 0f, Mathf.Sin(angle) * radius);
                 Vector2 current = projection.WorldToScreen(point);
                 if (i > 0)
-                    DrawLine(previous, current, color, 1f);
+                    DrawLine(previous, current, color, width);
                 previous = current;
             }
+        }
+
+        private static void DrawTargetReticle(Vector2 center)
+        {
+            DrawLine(center + new Vector2(-18f, 0f), center + new Vector2(-7f, 0f), CombatManagerTheme.Target, 2f);
+            DrawLine(center + new Vector2(7f, 0f), center + new Vector2(18f, 0f), CombatManagerTheme.Target, 2f);
+            DrawLine(center + new Vector2(0f, -18f), center + new Vector2(0f, -7f), CombatManagerTheme.Target, 2f);
+            DrawLine(center + new Vector2(0f, 7f), center + new Vector2(0f, 18f), CombatManagerTheme.Target, 2f);
+            DrawDiamond(center, 7f, CombatManagerTheme.Target);
+        }
+
+        private static void DrawShip(Vector2 center, Vector2 direction, Color color)
+        {
+            Vector2 forward = direction.sqrMagnitude < 0.001f ? new Vector2(0f, -1f) : direction.normalized;
+            Vector2 side = new Vector2(-forward.y, forward.x);
+            Vector2 bow = center + forward * 14f;
+            Vector2 stern = center - forward * 10f;
+            Vector2 left = stern + side * 8f;
+            Vector2 right = stern - side * 8f;
+
+            DrawLine(bow, left, color, 2f);
+            DrawLine(left, stern, color, 2f);
+            DrawLine(stern, right, color, 2f);
+            DrawLine(right, bow, color, 2f);
+            DrawLine(stern, bow, color, 1f);
+        }
+
+        private static void DrawLegend(Rect grid)
+        {
+            Rect legend = new Rect(grid.xMax - 156f, grid.y + 10f, 146f, 92f);
+            DrawFilledRect(legend, new Color(0.008f, 0.04f, 0.05f, 0.96f));
+            DrawBorder(legend);
+            GUI.Label(new Rect(legend.x + 8f, legend.y + 6f, 120f, 18f), "Legend", CombatManagerTheme.Mini);
+            DrawLegendRow(legend.x + 8f, legend.y + 26f, CombatManagerTheme.Craft, "Heading");
+            DrawLegendRow(legend.x + 8f, legend.y + 44f, CombatManagerTheme.Intent, "Travel");
+            DrawLegendRow(legend.x + 8f, legend.y + 62f, Orbit, "Orbit ring");
+            DrawLegendRow(legend.x + 8f, legend.y + 80f, Radial, "Target line");
+        }
+
+        private static void DrawLegendRow(float x, float y, Color color, string label)
+        {
+            DrawFilledRect(new Rect(x, y + 4f, 18f, 3f), color);
+            GUI.Label(new Rect(x + 25f, y - 2f, 100f, 18f), label, CombatManagerTheme.Mini);
         }
 
         private static void DrawLabel(Vector2 position, string label)
@@ -124,9 +210,16 @@ namespace CombatManager.Ui
             DrawLine(left, top, color, 2f);
         }
 
-        private static void DrawSquare(Vector2 center, float radius, Color color)
+        private static void DrawBorder(Rect rect)
         {
-            Rect rect = new Rect(center.x - radius, center.y - radius, radius * 2f, radius * 2f);
+            DrawLine(new Vector2(rect.x, rect.y), new Vector2(rect.xMax, rect.y), GridMajor, 1f);
+            DrawLine(new Vector2(rect.xMax, rect.y), new Vector2(rect.xMax, rect.yMax), GridMajor, 1f);
+            DrawLine(new Vector2(rect.xMax, rect.yMax), new Vector2(rect.x, rect.yMax), GridMajor, 1f);
+            DrawLine(new Vector2(rect.x, rect.yMax), new Vector2(rect.x, rect.y), GridMajor, 1f);
+        }
+
+        private static void DrawFilledRect(Rect rect, Color color)
+        {
             Color old = GUI.color;
             GUI.color = color;
             GUI.DrawTexture(rect, CombatManagerTheme.GridTexture);

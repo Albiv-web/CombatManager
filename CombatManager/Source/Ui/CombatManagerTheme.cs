@@ -13,6 +13,7 @@ namespace CombatManager.Ui
         private static Texture2D _grid;
 
         internal static GUIStyle Window { get; private set; }
+        internal static GUIStyle Title { get; private set; }
         internal static GUIStyle Header { get; private set; }
         internal static GUIStyle Body { get; private set; }
         internal static GUIStyle BodyWrap { get; private set; }
@@ -23,6 +24,7 @@ namespace CombatManager.Ui
         internal static GUIStyle SelectedRow { get; private set; }
         internal static GUIStyle Panel { get; private set; }
         internal static GUIStyle Warning { get; private set; }
+        internal static Texture2D WindowTexture => _panel;
         internal static Texture2D GridTexture => _grid;
 
         internal static readonly Color Cyan = new Color(0.05f, 0.9f, 1f, 1f);
@@ -38,28 +40,45 @@ namespace CombatManager.Ui
             if (_ready)
                 return;
 
-            _panel = Solid(new Color(0.015f, 0.055f, 0.065f, 0.92f), "CM panel");
-            _header = Solid(new Color(0.035f, 0.22f, 0.27f, 0.96f), "CM header");
-            _row = Solid(new Color(0.02f, 0.14f, 0.17f, 0.88f), "CM row");
-            _selected = Solid(new Color(0.02f, 0.45f, 0.54f, 0.96f), "CM selected");
-            _field = Solid(new Color(0.02f, 0.095f, 0.11f, 0.96f), "CM field");
+            _panel = Solid(new Color(0.01f, 0.035f, 0.045f, 1f), "CM panel");
+            _header = Solid(new Color(0.025f, 0.18f, 0.22f, 1f), "CM header");
+            _row = Solid(new Color(0.015f, 0.105f, 0.13f, 1f), "CM row");
+            _selected = Solid(new Color(0.02f, 0.45f, 0.54f, 1f), "CM selected");
+            _field = Solid(new Color(0.012f, 0.065f, 0.075f, 1f), "CM field");
             _grid = Solid(Color.white, "CM grid pixel");
 
             Window = new GUIStyle(GUI.skin.window)
             {
                 normal = { background = _panel, textColor = Color.white },
+                border = new RectOffset(0, 0, 0, 0),
+                margin = new RectOffset(0, 0, 0, 0),
+                overflow = new RectOffset(0, 0, 0, 0),
                 padding = new RectOffset(10, 10, 24, 10),
                 fontSize = 13,
                 fontStyle = FontStyle.Bold
             };
+            Title = new GUIStyle(GUI.skin.label)
+            {
+                normal = { textColor = Color.white },
+                alignment = TextAnchor.UpperCenter,
+                fontSize = 13,
+                fontStyle = FontStyle.Bold,
+                padding = new RectOffset(0, 0, 2, 0)
+            };
             Panel = new GUIStyle(GUI.skin.box)
             {
                 normal = { background = _field, textColor = Color.white },
+                border = new RectOffset(0, 0, 0, 0),
+                margin = new RectOffset(0, 0, 0, 0),
+                overflow = new RectOffset(0, 0, 0, 0),
                 padding = new RectOffset(8, 8, 8, 8)
             };
             Header = new GUIStyle(GUI.skin.label)
             {
                 normal = { background = _header, textColor = Color.white },
+                border = new RectOffset(0, 0, 0, 0),
+                margin = new RectOffset(0, 0, 2, 2),
+                overflow = new RectOffset(0, 0, 0, 0),
                 alignment = TextAnchor.MiddleLeft,
                 fontSize = 13,
                 fontStyle = FontStyle.Bold,
@@ -90,6 +109,9 @@ namespace CombatManager.Ui
                 normal = { background = _row, textColor = Color.white },
                 hover = { background = _selected, textColor = Color.white },
                 active = { background = _selected, textColor = Color.white },
+                border = new RectOffset(0, 0, 0, 0),
+                margin = new RectOffset(1, 1, 1, 1),
+                overflow = new RectOffset(0, 0, 0, 0),
                 fontSize = 11,
                 padding = new RectOffset(6, 6, 3, 3)
             };

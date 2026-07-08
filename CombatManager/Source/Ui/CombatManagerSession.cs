@@ -86,6 +86,9 @@ namespace CombatManager.Ui
 
         private void DrawWindow(int id)
         {
+            DrawWindowBackdrop();
+            GUI.Label(new Rect(0f, 2f, _window.width, 20f), "CombatManager AI Sandbox", CombatManagerTheme.Title);
+
             Rect client = new Rect(10f, 26f, _window.width - 20f, _window.height - 36f);
             Rect toolbar = new Rect(client.x, client.y, client.width, 30f);
             Rect body = new Rect(client.x, toolbar.yMax + 8f, client.width, client.height - toolbar.height - 8f);
@@ -142,14 +145,7 @@ namespace CombatManager.Ui
             if (_state.ShowInspector)
                 DrawInspector(inspector);
 
-            Rect grid = SquareInside(gridArea);
-            CombatManagerGridRenderer.Draw(grid, _state);
-
-            if (gridArea.height - grid.height > 24f)
-            {
-                Rect status = new Rect(gridArea.x, grid.yMax + 6f, gridArea.width, 20f);
-                GUI.Label(status, _state.ImportStatus, CombatManagerTheme.Mini);
-            }
+            CombatManagerGridRenderer.Draw(gridArea, _state);
         }
 
         private void DrawInspector(Rect rect)
@@ -157,10 +153,9 @@ namespace CombatManager.Ui
             GUILayout.BeginArea(rect, CombatManagerTheme.Panel);
             _inspectorScroll = GUILayout.BeginScrollView(_inspectorScroll);
 
-            GUILayout.Label("Sandbox controls", CombatManagerTheme.Header);
+            GUILayout.Label("Preset", CombatManagerTheme.Header);
             GUILayout.Space(4f);
 
-            GUILayout.Label("Behaviour preset", CombatManagerTheme.Mini);
             GUILayout.BeginHorizontal();
             PresetButton("Circle", AiSimulationPreset.Circle);
             PresetButton("Point At", AiSimulationPreset.PointAt);
@@ -168,9 +163,10 @@ namespace CombatManager.Ui
             GUILayout.EndHorizontal();
 
             GUILayout.Space(8f);
+            GUILayout.Label("Movement", CombatManagerTheme.Header);
             GUILayout.Label("Preferred side", CombatManagerTheme.Mini);
             GUILayout.BeginHorizontal();
-            SideButton("Both", AiSimulationSide.Both);
+            SideButton("Auto/Both", AiSimulationSide.Both);
             SideButton("Left", AiSimulationSide.Left);
             SideButton("Right", AiSimulationSide.Right);
             GUILayout.EndHorizontal();
@@ -190,36 +186,22 @@ namespace CombatManager.Ui
                 _state.BroadsideAngle = SliderRow("Broadside angle", _state.BroadsideAngle, 10f, 170f, "deg");
 
             GUILayout.Space(10f);
-            GUILayout.Label("Simulation status", CombatManagerTheme.Header);
+            GUILayout.Label("Visuals", CombatManagerTheme.Header);
+            _state.GridZoom = SliderRow("Zoom", _state.GridZoom, 0.5f, 3f, "x");
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("Fit Orbit", CombatManagerTheme.Button))
+                _state.GridZoom = 1f;
+            _state.ShowTrail = ToggleButton("Show Trail", _state.ShowTrail);
+            _state.ShowLegend = ToggleButton("Legend", _state.ShowLegend);
+            GUILayout.EndHorizontal();
+
+            GUILayout.Space(10f);
+            GUILayout.Label("Status", CombatManagerTheme.Header);
             GUILayout.Label(_state.BuildFrame().Summary, CombatManagerTheme.BodyWrap);
             GUILayout.Label(_state.ImportStatus, CombatManagerTheme.Warning);
 
             GUILayout.Space(8f);
-            GUILayout.Label("Imported AI snapshot", CombatManagerTheme.Header);
-            LabelPair("Mainframe", _state.ImportedMainframe);
-            LabelPair("Behaviour", _state.ImportedBehaviour);
-
-            if (_state.ImportedParameters.Count == 0)
-            {
-                GUILayout.Label("No imported behaviour parameters.", CombatManagerTheme.BodyWrap);
-            }
-            else
-            {
-                foreach (string parameter in _state.ImportedParameters)
-                    GUILayout.Label(parameter, CombatManagerTheme.Body);
-            }
-
-            GUILayout.Space(6f);
-            GUILayout.Label("Imported requests", CombatManagerTheme.Header);
-            if (_state.ImportedRequests.Count == 0)
-            {
-                GUILayout.Label("No imported control requests.", CombatManagerTheme.BodyWrap);
-            }
-            else
-            {
-                foreach (AiControlRequestSnapshot request in _state.ImportedRequests)
-                    GUILayout.Label($"{request.Type}: {request.Value:0.00}", CombatManagerTheme.Body);
-            }
+            DrawImportDrawer();
 
             GUILayout.EndScrollView();
             GUILayout.EndArea();
@@ -242,6 +224,44 @@ namespace CombatManager.Ui
             }
         }
 
+        private void DrawImportDrawer()
+        {
+            GUILayout.Label("Import", CombatManagerTheme.Header);
+            LabelPair("Mainframe", _state.ImportedMainframe);
+            LabelPair("Behaviour", _state.ImportedBehaviour);
+
+            string label = _state.ShowImportDetails ? "Hide Import Details" : "Show Import Details";
+            if (GUILayout.Button(label, CombatManagerTheme.Button))
+                _state.ShowImportDetails = !_state.ShowImportDetails;
+
+            if (!_state.ShowImportDetails)
+                return;
+
+            GUILayout.Space(4f);
+            GUILayout.Label("Parameters", CombatManagerTheme.Mini);
+            if (_state.ImportedParameters.Count == 0)
+            {
+                GUILayout.Label("No imported behaviour parameters.", CombatManagerTheme.BodyWrap);
+            }
+            else
+            {
+                foreach (string parameter in _state.ImportedParameters)
+                    GUILayout.Label(parameter, CombatManagerTheme.Body);
+            }
+
+            GUILayout.Space(6f);
+            GUILayout.Label("Requests", CombatManagerTheme.Mini);
+            if (_state.ImportedRequests.Count == 0)
+            {
+                GUILayout.Label("No imported control requests.", CombatManagerTheme.BodyWrap);
+            }
+            else
+            {
+                foreach (AiControlRequestSnapshot request in _state.ImportedRequests)
+                    GUILayout.Label($"{request.Type}: {request.Value:0.00}", CombatManagerTheme.Body);
+            }
+        }
+
         private static float SliderRow(string label, float value, float min, float max, string suffix)
         {
             GUILayout.BeginHorizontal();
@@ -252,14 +272,18 @@ namespace CombatManager.Ui
             return adjusted;
         }
 
-        private static Rect SquareInside(Rect rect)
+        private static bool ToggleButton(string label, bool value)
         {
-            float size = Mathf.Max(180f, Mathf.Min(rect.width, rect.height));
-            return new Rect(
-                rect.x + (rect.width - size) * 0.5f,
-                rect.y + (rect.height - size) * 0.5f,
-                size,
-                size);
+            GUIStyle style = value ? CombatManagerTheme.ActiveButton : CombatManagerTheme.Button;
+            return GUILayout.Button(label, style) ? !value : value;
+        }
+
+        private void DrawWindowBackdrop()
+        {
+            Color old = GUI.color;
+            GUI.color = Color.white;
+            GUI.DrawTexture(new Rect(0f, 0f, _window.width, _window.height), CombatManagerTheme.WindowTexture);
+            GUI.color = old;
         }
 
         private void DrawResizeHandle()

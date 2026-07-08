@@ -6,3 +6,8 @@
 - Converted the overlay into a standalone AI sandbox.
 - Added target-centered circle, point-at, and broadside presets.
 - Added one-shot Import Current AI seeding and a resizable grid-first UI.
+
+0.1.2
+- Reworked the overlay into an opaque tactical console.
+- Expanded the grid to fill rectangular viewports while keeping target-centered scale.
+- Added clearer orbit/craft/target drawing, zoom, fit orbit, trail, legend, and collapsed import details.
