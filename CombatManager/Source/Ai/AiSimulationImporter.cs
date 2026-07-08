@@ -49,6 +49,7 @@ namespace CombatManager.Ai
             {
                 state.SetPreset(AiSimulationPreset.Circle);
                 state.Radius = Mathf.Max(10f, circle.DistanceToMaintain.Us);
+                state.CircleMinApproachAngle = circle.MinApproachAngle.Us;
                 state.Side = MapSide(circle.PreferredSide.Us);
                 state.ImportedParameters.Add($"distance {circle.DistanceToMaintain.Us:0.#}m");
                 state.ImportedParameters.Add($"side {circle.PreferredSide.Us}");
@@ -63,12 +64,13 @@ namespace CombatManager.Ai
             }
             else if (behaviour is FtdNaval naval)
             {
-                state.SetPreset(AiSimulationPreset.Broadside);
+                state.SetPreset(AiSimulationPreset.NavalBroadside);
                 state.Radius = Mathf.Max(
                     10f,
                     Mathf.Max(naval.MinimumBroadsideDistanceToMaintain.Us, naval.BroadsideDistance.Lower));
+                state.BroadsideOuterRadius = Mathf.Max(state.Radius + 20f, naval.BroadsideDistance.Upper);
                 state.BroadsideAngle = Mathf.Abs(naval.NominalBroadsideAngle.Us);
-                state.Side = AiSimulationSide.Left;
+                state.Side = AiSimulationSide.Both;
                 state.ImportedParameters.Add($"enter broadside <= {naval.BroadsideDistance.Lower:0.#}m");
                 state.ImportedParameters.Add($"leave broadside >= {naval.BroadsideDistance.Upper:0.#}m");
                 state.ImportedParameters.Add($"nominal angle {naval.NominalBroadsideAngle.Us:0.#} deg");

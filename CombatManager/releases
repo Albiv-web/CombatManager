@@ -11,3 +11,8 @@
 - Reworked the overlay into an opaque tactical console.
 - Expanded the grid to fill rectangular viewports while keeping target-centered scale.
 - Added clearer orbit/craft/target drawing, zoom, fit orbit, trail, legend, and collapsed import details.
+
+0.1.3
+- Added simulated target profiles and target path modes.
+- Added craft pursuit state with speed, acceleration, and turn-rate controls.
+- Mirrored AI steer-point planners for circle, point-at, broadside, and Naval 2.0 sandbox behaviour.

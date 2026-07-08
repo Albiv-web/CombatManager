@@ -116,7 +116,7 @@ namespace CombatManager.Ui
             }
 
             if (GUILayout.Button("Reset", CombatManagerTheme.Button, GUILayout.Width(62f)))
-                _state.Reset();
+                _state.ResetScenario();
 
             if (GUILayout.Button("Import Current AI", CombatManagerTheme.Button, GUILayout.Width(128f)))
             {
@@ -159,8 +159,14 @@ namespace CombatManager.Ui
             GUILayout.BeginHorizontal();
             PresetButton("Circle", AiSimulationPreset.Circle);
             PresetButton("Point At", AiSimulationPreset.PointAt);
-            PresetButton("Broadside", AiSimulationPreset.Broadside);
             GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
+            PresetButton("Broadside", AiSimulationPreset.Broadside);
+            PresetButton("Naval 2.0", AiSimulationPreset.NavalBroadside);
+            GUILayout.EndHorizontal();
+
+            GUILayout.Space(8f);
+            DrawTargetControls();
 
             GUILayout.Space(8f);
             GUILayout.Label("Movement", CombatManagerTheme.Header);
@@ -176,14 +182,24 @@ namespace CombatManager.Ui
             if (!Mathf.Approximately(radius, _state.Radius))
             {
                 _state.Radius = radius;
-                _state.Reset();
+                _state.BroadsideOuterRadius = Mathf.Max(_state.BroadsideOuterRadius, radius + 20f);
+                _state.ResetScenario();
             }
 
-            _state.CraftSpeed = SliderRow("Craft speed", _state.CraftSpeed, 1f, 120f, "m/s");
             _state.PlaybackSpeed = SliderRow("Playback speed", _state.PlaybackSpeed, 0.1f, 5f, "x");
 
-            if (_state.Preset == AiSimulationPreset.Broadside)
+            if (_state.Preset == AiSimulationPreset.Broadside || _state.Preset == AiSimulationPreset.NavalBroadside)
                 _state.BroadsideAngle = SliderRow("Broadside angle", _state.BroadsideAngle, 10f, 170f, "deg");
+            if (_state.Preset == AiSimulationPreset.NavalBroadside)
+                _state.BroadsideOuterRadius = SliderRow("Leave range", _state.BroadsideOuterRadius, _state.Radius + 20f, 2500f, "m");
+
+            GUILayout.Space(8f);
+            GUILayout.Label("Craft", CombatManagerTheme.Header);
+            _state.CraftSpeed = SliderRow("Max speed", _state.CraftSpeed, 1f, 160f, "m/s");
+            _state.CraftTurnRate = SliderRow("Turn rate", _state.CraftTurnRate, 5f, 240f, "deg/s");
+            _state.CraftAcceleration = SliderRow("Acceleration", _state.CraftAcceleration, 1f, 80f, "m/s2");
+            if (GUILayout.Button("Reset Craft", CombatManagerTheme.Button))
+                _state.ResetCraft();
 
             GUILayout.Space(10f);
             GUILayout.Label("Visuals", CombatManagerTheme.Header);
@@ -192,12 +208,19 @@ namespace CombatManager.Ui
             if (GUILayout.Button("Fit Orbit", CombatManagerTheme.Button))
                 _state.GridZoom = 1f;
             _state.ShowTrail = ToggleButton("Show Trail", _state.ShowTrail);
+            _state.ShowDesiredTrail = ToggleButton("AI Trail", _state.ShowDesiredTrail);
+            GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
+            _state.ShowTargetPath = ToggleButton("Target Path", _state.ShowTargetPath);
             _state.ShowLegend = ToggleButton("Legend", _state.ShowLegend);
             GUILayout.EndHorizontal();
 
             GUILayout.Space(10f);
             GUILayout.Label("Status", CombatManagerTheme.Header);
-            GUILayout.Label(_state.BuildFrame().Summary, CombatManagerTheme.BodyWrap);
+            AiSimulationFrame frame = _state.BuildFrame();
+            GUILayout.Label(frame.Summary, CombatManagerTheme.BodyWrap);
+            GUILayout.Label($"Range {frame.GroundRange:0.#}m | Azimuth {frame.Azimuth:0.#} deg", CombatManagerTheme.BodyWrap);
+            GUILayout.Label($"{frame.Kind}: {frame.AiState}{(frame.Approximate ? " (approximated)" : string.Empty)}", frame.Approximate ? CombatManagerTheme.Warning : CombatManagerTheme.BodyWrap);
             GUILayout.Label(_state.ImportStatus, CombatManagerTheme.Warning);
 
             GUILayout.Space(8f);
@@ -221,6 +244,54 @@ namespace CombatManager.Ui
             {
                 _state.Side = side;
                 _state.Reset();
+            }
+        }
+
+        private void DrawTargetControls()
+        {
+            GUILayout.Label("Target", CombatManagerTheme.Header);
+            GUILayout.BeginHorizontal();
+            TargetProfileButton("Static", AiTargetProfile.Static);
+            TargetProfileButton("Slow", AiTargetProfile.SlowMover);
+            TargetProfileButton("Ship", AiTargetProfile.Ship);
+            GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
+            TargetProfileButton("Fast", AiTargetProfile.FastMover);
+            TargetProfileButton("Plane", AiTargetProfile.Plane);
+            GUILayout.EndHorizontal();
+
+            GUILayout.Label("Path mode", CombatManagerTheme.Mini);
+            GUILayout.BeginHorizontal();
+            PathModeButton("Straight", AiTargetPathMode.Straight);
+            PathModeButton("Orbit", AiTargetPathMode.Orbit);
+            PathModeButton("S-Curve", AiTargetPathMode.SCurve);
+            GUILayout.EndHorizontal();
+
+            _state.TargetSpeed = SliderRow("Target speed", _state.TargetSpeed, 0f, 140f, "m/s");
+            _state.TargetTurnRate = SliderRow("Turn rate", _state.TargetTurnRate, 0f, 20f, "deg/s");
+            _state.TargetAltitude = SliderRow("Altitude", _state.TargetAltitude, 0f, 800f, "m");
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("Reset Target Path", CombatManagerTheme.Button))
+                _state.ResetTargetPath();
+            if (GUILayout.Button("Reset Scenario", CombatManagerTheme.Button))
+                _state.ResetScenario();
+            GUILayout.EndHorizontal();
+        }
+
+        private void TargetProfileButton(string label, AiTargetProfile profile)
+        {
+            GUIStyle style = _state.TargetProfile == profile ? CombatManagerTheme.ActiveButton : CombatManagerTheme.Button;
+            if (GUILayout.Button(label, style))
+                _state.SetTargetProfile(profile);
+        }
+
+        private void PathModeButton(string label, AiTargetPathMode mode)
+        {
+            GUIStyle style = _state.TargetPathMode == mode ? CombatManagerTheme.ActiveButton : CombatManagerTheme.Button;
+            if (GUILayout.Button(label, style))
+            {
+                _state.TargetPathMode = mode;
+                _state.ResetTargetPath();
             }
         }
 

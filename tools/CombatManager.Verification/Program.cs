@@ -14,12 +14,17 @@ namespace CombatManager.Verification
                 SafePlanarDirectionIgnoresY();
                 RotateYawMatchesUnityTopDownConvention();
                 GroundDistanceUsesOnlyXZ();
-                CircleStepAdvancesBySpeedOverRadius();
+                CraftMovesDuringCircleSimulation();
                 TargetProjectionStaysCentered();
                 OrbitRingFitsResizeBounds();
                 RectangularProjectionKeepsTargetCentered();
                 ZoomChangesMetersPerPixelPredictably();
                 SideModesProduceStableFrames();
+                TargetCenteredCoordinateConversionSurvivesTargetMovement();
+                TargetProfileSpeedTurnStepping();
+                PointAtPlannerKeepsDesiredRangeAroundMovingTarget();
+                BroadsidePlannerFlipsSidePredictably();
+                CraftPursuitConvergesTowardStationaryDesiredPoint();
                 Console.WriteLine("CombatManager verification passed.");
                 return 0;
             }
@@ -63,7 +68,7 @@ namespace CombatManager.Verification
             AssertNear(5f, distance, "3-4-5 ground distance");
         }
 
-        private static void CircleStepAdvancesBySpeedOverRadius()
+        private static void CraftMovesDuringCircleSimulation()
         {
             var state = new AiSimulationState
             {
@@ -75,8 +80,11 @@ namespace CombatManager.Verification
             };
 
             state.Reset();
-            state.Step(10f);
-            AssertNear(57.29578f, state.OrbitAngleDegrees, "circle angular step");
+            Vector3 before = state.CraftPosition;
+            state.Step(2f);
+
+            if (PlanarMath.GroundDistance(before, state.CraftPosition) <= 0.1f)
+                throw new InvalidOperationException("circle simulation did not move the craft");
         }
 
         private static void TargetProjectionStaysCentered()
@@ -152,8 +160,88 @@ namespace CombatManager.Verification
             AssertNear(expectedDirection, state.OrbitDirection(), $"{side} orbit direction");
             AssertNear(200f, PlanarMath.GroundDistance(Vector3.zero, frame.CraftPosition), $"{side} craft radius");
 
-            if (float.IsNaN(frame.Heading.x) || float.IsNaN(frame.Heading.z))
+            if (float.IsNaN(frame.CraftHeading.x) || float.IsNaN(frame.CraftHeading.z))
                 throw new InvalidOperationException($"{side} produced a NaN heading");
+        }
+
+        private static void TargetCenteredCoordinateConversionSurvivesTargetMovement()
+        {
+            var state = new AiSimulationState();
+            state.SetTargetProfile(AiTargetProfile.FastMover);
+            state.Step(5f);
+            Rect rect = new Rect(0f, 0f, 900f, 500f);
+            AiSimulationGridProjection projection = AiSimulationGridProjection.For(rect, state);
+            Vector2 targetScreen = projection.WorldToScreen(state.TargetPosition);
+
+            AssertNear(rect.center.x, targetScreen.x, "moving target center x");
+            AssertNear(rect.center.y, targetScreen.y, "moving target center y");
+        }
+
+        private static void TargetProfileSpeedTurnStepping()
+        {
+            var state = new AiSimulationState();
+            state.SetTargetProfile(AiTargetProfile.Ship);
+            Vector3 heading = state.TargetHeading;
+            state.Step(1f);
+
+            AssertNear(18f, state.TargetVelocity.magnitude, "ship profile speed");
+            if (PlanarMath.SignedPlanarAngle(heading, state.TargetHeading) <= 0.1f)
+                throw new InvalidOperationException("ship profile did not turn on orbit path");
+        }
+
+        private static void PointAtPlannerKeepsDesiredRangeAroundMovingTarget()
+        {
+            var state = new AiSimulationState
+            {
+                Preset = AiSimulationPreset.PointAt,
+                Radius = 275f
+            };
+            state.SetTargetProfile(AiTargetProfile.FastMover);
+            state.Step(1f);
+            AiSimulationFrame frame = state.BuildFrame();
+
+            AssertNear(275f, PlanarMath.GroundDistance(frame.TargetPosition, frame.DesiredPoint), "point-at desired range");
+        }
+
+        private static void BroadsidePlannerFlipsSidePredictably()
+        {
+            var state = new AiSimulationState
+            {
+                Preset = AiSimulationPreset.Broadside,
+                Radius = 200f,
+                BroadsideAngle = 75f,
+                Side = AiSimulationSide.Left
+            };
+            state.Reset();
+            AssertNear(75f, state.BuildFrame().BroadsideAngle, "left broadside angle");
+
+            state.Side = AiSimulationSide.Right;
+            AssertNear(-75f, state.BuildFrame().BroadsideAngle, "right broadside angle");
+        }
+
+        private static void CraftPursuitConvergesTowardStationaryDesiredPoint()
+        {
+            var state = new AiSimulationState
+            {
+                Preset = AiSimulationPreset.PointAt,
+                Radius = 400f,
+                CraftSpeed = 50f,
+                CraftAcceleration = 25f
+            };
+            state.SetTargetProfile(AiTargetProfile.Static);
+            state.Reset();
+            state.Radius = 520f;
+            float initialError = PlanarMath.GroundDistance(state.CraftPosition, state.BuildFrame().DesiredPoint);
+
+            for (int i = 0; i < 120; i++)
+                state.Step(0.1f);
+
+            AiSimulationFrame frame = state.BuildFrame();
+            float finalError = PlanarMath.GroundDistance(state.CraftPosition, frame.DesiredPoint);
+            if (finalError >= initialError * 0.25f)
+                throw new InvalidOperationException($"craft pursuit did not converge enough: initial {initialError}, final {finalError}");
+            if (Math.Abs(frame.GroundRange - state.Radius) > 35f)
+                throw new InvalidOperationException($"craft pursuit overshot desired range: {frame.GroundRange}");
         }
 
         private static void AssertNear(float expected, float actual, string name)
