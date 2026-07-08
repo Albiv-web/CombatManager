@@ -33,3 +33,10 @@
 - Moved Blue/player controls to a fixed left panel and Red/enemy controls to a fixed right panel.
 - Moved scenario, playback, zoom, fit, and overlay toggles into a compact top toolbar.
 - Added independent side-panel scrolling and layout verification for 1280x720 and wide screens.
+
+0.1.7
+- Polished the fullscreen HUD for readability.
+- Replaced always-expanded side panels with tabbed Blue and Red controls.
+- Increased panel width, text size, button height, and slider label/value spacing.
+- Simplified the toolbar into grouped scenario, playback, and view controls.
+- Added opaque graph label backplates and reduced default graph text clutter.

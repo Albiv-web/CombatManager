@@ -503,6 +503,15 @@ V1.6 is a layout milestone on top of the same simulation model:
 - No new live synchronization or write path was introduced; Blue import remains
   one-shot and Red remains manually configured.
 
+V1.7 is a readability milestone on top of the same simulation model:
+
+- Blue and Red side panels now use tabs so AI, movement, status, and import
+  controls no longer compete in one long scroll.
+- Toolbar controls are grouped into scenario, playback, and view controls.
+- Text, buttons, sliders, and graph labels are larger, and graph labels use
+  opaque backplates to remain readable over the tactical grid.
+- No planner or manoeuvre simulation behaviour changed.
+
 ## Next Research Targets
 
 To improve fidelity, decompile and summarize these next:

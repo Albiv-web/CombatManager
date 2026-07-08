@@ -24,6 +24,7 @@ namespace CombatManager.Ui
         internal static GUIStyle SelectedRow { get; private set; }
         internal static GUIStyle Panel { get; private set; }
         internal static GUIStyle Warning { get; private set; }
+        internal static GUIStyle GridLabel { get; private set; }
         internal static Texture2D WindowTexture => _panel;
         internal static Texture2D GridTexture => _grid;
 
@@ -71,7 +72,7 @@ namespace CombatManager.Ui
                 border = new RectOffset(0, 0, 0, 0),
                 margin = new RectOffset(0, 0, 0, 0),
                 overflow = new RectOffset(0, 0, 0, 0),
-                padding = new RectOffset(8, 8, 8, 8)
+                padding = new RectOffset(10, 10, 10, 10)
             };
             Header = new GUIStyle(GUI.skin.label)
             {
@@ -80,14 +81,15 @@ namespace CombatManager.Ui
                 margin = new RectOffset(0, 0, 2, 2),
                 overflow = new RectOffset(0, 0, 0, 0),
                 alignment = TextAnchor.MiddleLeft,
-                fontSize = 13,
+                fontSize = 14,
                 fontStyle = FontStyle.Bold,
-                padding = new RectOffset(6, 6, 3, 3)
+                padding = new RectOffset(8, 8, 4, 4),
+                fixedHeight = 27f
             };
             Body = new GUIStyle(GUI.skin.label)
             {
                 normal = { textColor = Color.white },
-                fontSize = 12,
+                fontSize = 13,
                 wordWrap = false
             };
             BodyWrap = new GUIStyle(Body)
@@ -96,7 +98,7 @@ namespace CombatManager.Ui
             };
             Mini = new GUIStyle(Body)
             {
-                fontSize = 10,
+                fontSize = 11,
                 normal = { textColor = new Color(0.75f, 0.92f, 0.96f, 1f) }
             };
             Warning = new GUIStyle(BodyWrap)
@@ -112,8 +114,10 @@ namespace CombatManager.Ui
                 border = new RectOffset(0, 0, 0, 0),
                 margin = new RectOffset(1, 1, 1, 1),
                 overflow = new RectOffset(0, 0, 0, 0),
-                fontSize = 11,
-                padding = new RectOffset(6, 6, 3, 3)
+                alignment = TextAnchor.MiddleCenter,
+                fontSize = 12,
+                padding = new RectOffset(8, 8, 4, 4),
+                fixedHeight = 26f
             };
             ActiveButton = new GUIStyle(Button)
             {
@@ -129,6 +133,12 @@ namespace CombatManager.Ui
             {
                 normal = { background = _selected, textColor = Color.white },
                 fontStyle = FontStyle.Bold
+            };
+            GridLabel = new GUIStyle(Mini)
+            {
+                fontSize = 12,
+                normal = { textColor = Color.white },
+                padding = new RectOffset(5, 5, 2, 2)
             };
             _ready = true;
         }

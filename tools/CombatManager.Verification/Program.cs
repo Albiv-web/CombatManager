@@ -29,6 +29,8 @@ namespace CombatManager.Verification
                 FullscreenLayoutKeepsPanelsInsideScreen();
                 FullscreenLayoutKeepsGraphPositiveAt1280();
                 FullscreenLayoutAssignsSeparateColumns();
+                FullscreenLayoutKeepsTabContentInsidePanels();
+                FullscreenToolbarGroupsDoNotOverlap();
                 Console.WriteLine("CombatManager verification passed.");
                 return 0;
             }
@@ -244,8 +246,8 @@ namespace CombatManager.Verification
         private static void FullscreenLayoutKeepsGraphPositiveAt1280()
         {
             CombatManagerEditorLayout layout = CombatManagerEditorLayout.For(1280f, 720f);
-            AssertNear(260f, layout.SidePanelWidth, "1280 side panel width");
-            if (layout.Grid.width <= 420f)
+            AssertNear(300f, layout.SidePanelWidth, "1280 side panel width");
+            if (layout.Grid.width <= 560f)
                 throw new InvalidOperationException($"1280 graph width too small: {layout.Grid.width}");
             if (layout.Grid.height <= 500f)
                 throw new InvalidOperationException($"1280 graph height too small: {layout.Grid.height}");
@@ -254,11 +256,30 @@ namespace CombatManager.Verification
         private static void FullscreenLayoutAssignsSeparateColumns()
         {
             CombatManagerEditorLayout layout = CombatManagerEditorLayout.For(1920f, 1080f);
-            AssertNear(320f, layout.SidePanelWidth, "wide side panel width");
+            AssertNear(380f, layout.SidePanelWidth, "wide side panel width");
             if (!(layout.BluePanel.xMax < layout.Grid.x && layout.Grid.xMax < layout.RedPanel.x))
                 throw new InvalidOperationException("Blue, graph, and Red columns overlap or are out of order");
             if (Math.Abs(layout.BluePanel.width - layout.RedPanel.width) > 0.001f)
                 throw new InvalidOperationException("side panel widths diverged");
+        }
+
+        private static void FullscreenLayoutKeepsTabContentInsidePanels()
+        {
+            CombatManagerEditorLayout layout = CombatManagerEditorLayout.For(1920f, 1080f);
+            AssertRectInside(layout.BluePanel, layout.BlueTabContent, "blue tab content");
+            AssertRectInside(layout.RedPanel, layout.RedTabContent, "red tab content");
+            if (layout.BlueTabContent.height <= 840f || layout.RedTabContent.height <= 840f)
+                throw new InvalidOperationException("tab content lost too much vertical space");
+        }
+
+        private static void FullscreenToolbarGroupsDoNotOverlap()
+        {
+            CombatManagerEditorLayout layout = CombatManagerEditorLayout.For(1280f, 720f);
+            AssertRectInside(layout.Toolbar, layout.ToolbarLeft, "toolbar left");
+            AssertRectInside(layout.Toolbar, layout.ToolbarMiddle, "toolbar middle");
+            AssertRectInside(layout.Toolbar, layout.ToolbarRight, "toolbar right");
+            if (!(layout.ToolbarLeft.xMax < layout.ToolbarMiddle.x && layout.ToolbarMiddle.xMax < layout.ToolbarRight.x))
+                throw new InvalidOperationException("toolbar groups overlap or are out of order");
         }
 
         private static void ConfigureSymmetricPointAt(AiSimEntity entity)
@@ -306,6 +327,12 @@ namespace CombatManager.Verification
         {
             if (Math.Abs(expected - actual) > 0.001f)
                 throw new InvalidOperationException($"{name}: expected {expected}, got {actual}");
+        }
+
+        private static void AssertRectInside(Rect outer, Rect inner, string name)
+        {
+            if (inner.x < outer.x || inner.y < outer.y || inner.xMax > outer.xMax || inner.yMax > outer.yMax)
+                throw new InvalidOperationException($"{name} escaped its parent");
         }
     }
 }

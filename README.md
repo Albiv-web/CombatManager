@@ -1,10 +1,10 @@
 # CombatManager
 
 CombatManager is a From The Depths mod based on the working structure of
-EndlessShapes Unlimited. V1.6 presents the symmetric Blue-vs-Red duel sandbox
-as a fullscreen editor: Blue/player controls are fixed on the left, Red/enemy
-controls are fixed on the right, and the Red-centered tactical graph fills the
-middle.
+EndlessShapes Unlimited. V1.7 presents the symmetric Blue-vs-Red duel sandbox
+as a more readable fullscreen editor: Blue/player controls are tabbed on the
+left, Red/enemy controls are tabbed on the right, and the Red-centered tactical
+graph fills the middle.
 
 - `plugin.json` tells From The Depths which assembly to load.
 - `CombatManager.dll` contains a `GamePlugin_PostLoad` implementation and the
@@ -48,10 +48,10 @@ C:\Users\<you>\Documents\From The Depths\Mods\CombatManager
 Press `Ctrl+Shift+C` to open/close the sandbox. The hotkey is guarded against
 text input, but it no longer depends on a focused craft or build mode.
 
-The V1.6 editor is read-only toward the real game. It shows:
+The V1.7 editor is read-only toward the real game. It shows:
 
 - An opaque fullscreen Red-centered top-down X/Z tactical grid.
-- Fixed Blue/player and Red/enemy panels with independent scrolling.
+- Tabbed Blue/player and Red/enemy panels with independent scrolling.
 - Blue and Red mainframe controls for circle, point-at, broadside, and Naval 2.0.
 - Ship/tank, hover, six-axis, and airplane manoeuvre simulation for both sides.
 - Ship duel, broadside duel, hover duel, and plane intercept presets.
@@ -59,6 +59,7 @@ The V1.6 editor is read-only toward the real game. It shows:
   and optional legend for both simulated craft.
 - Top-toolbar controls for scenario presets, play, pause, step, reset, zoom,
   fit duel, trail visibility, and tactical overlays.
+- Larger, clearer HUD text and graph labels with opaque backplates.
 - Optional one-shot `Import Blue AI` seeding from a selected mainframe on the
   focused craft. Red remains manually configured.
 

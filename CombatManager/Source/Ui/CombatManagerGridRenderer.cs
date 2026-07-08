@@ -14,6 +14,7 @@ namespace CombatManager.Ui
         private static readonly Color RawSteer = new Color(1f, 0.38f, 0.92f, 0.9f);
         private static readonly Color MotionPoint = new Color(1f, 0.72f, 0.2f, 1f);
         private static readonly Color Radial = new Color(0.6f, 0.9f, 1f, 0.42f);
+        private static readonly Color LabelBack = new Color(0.006f, 0.032f, 0.038f, 0.92f);
 
         internal static void Draw(Rect rect, AiSimulationState state)
         {
@@ -46,8 +47,7 @@ namespace CombatManager.Ui
             DrawEntity(projection, state, frame.Blue, Blue, "Blue");
             DrawEntity(projection, state, frame.Red, Red, "Red");
 
-            DrawLabel(new Vector2(grid.x + 8f, grid.y + 8f), $"{frame.Blue.Kind} vs {frame.Red.Kind} | Red target-centered");
-            DrawLabel(new Vector2(grid.x + 8f, grid.y + 26f), $"range {frame.Blue.GroundRange:0.#}m | Blue azi {frame.Blue.Azimuth:0.#} deg | Red azi {frame.Red.Azimuth:0.#} deg");
+            DrawLabel(new Vector2(grid.x + 10f, grid.y + 10f), $"{frame.Blue.Kind} vs {frame.Red.Kind} | range {frame.Blue.GroundRange:0.#}m");
             DrawLabel(new Vector2(grid.x + 8f, grid.yMax - 22f), $"{projection.MetersPerPixel:0.##} m/px  |  zoom {state.GridZoom:0.#}x");
 
             if (state.ShowLegend)
@@ -86,8 +86,7 @@ namespace CombatManager.Ui
                 DrawArrow(craft + offset, travel, CombatManagerTheme.Intent, 2f);
             }
 
-            DrawLabel(craft + new Vector2(12f, -26f), $"{label} {frame.GroundRange:0.#}m");
-            DrawLabel(craft + new Vector2(12f, -8f), $"{frame.Kind} / {frame.CraftMovementModel}");
+            DrawLabel(craft + new Vector2(14f, -12f), $"{label}: {frame.Kind} {frame.GroundRange:0.#}m");
         }
 
         private static void DrawGrid(AiSimulationGridProjection projection)
@@ -201,10 +200,10 @@ namespace CombatManager.Ui
 
         private static void DrawLegend(Rect grid)
         {
-            Rect legend = new Rect(grid.xMax - 176f, grid.y + 10f, 166f, 128f);
-            DrawFilledRect(legend, new Color(0.008f, 0.04f, 0.05f, 0.96f));
+            Rect legend = new Rect(grid.xMax - 168f, grid.y + 10f, 156f, 122f);
+            DrawFilledRect(legend, new Color(0.008f, 0.04f, 0.05f, 0.9f));
             DrawBorder(legend);
-            GUI.Label(new Rect(legend.x + 8f, legend.y + 6f, 120f, 18f), "Legend", CombatManagerTheme.Mini);
+            GUI.Label(new Rect(legend.x + 8f, legend.y + 6f, 120f, 18f), "Legend", CombatManagerTheme.GridLabel);
             DrawLegendRow(legend.x + 8f, legend.y + 26f, Blue, "Blue craft");
             DrawLegendRow(legend.x + 8f, legend.y + 44f, Red, "Red craft");
             DrawLegendRow(legend.x + 8f, legend.y + 62f, CombatManagerTheme.Intent, "Desired travel");
@@ -216,12 +215,16 @@ namespace CombatManager.Ui
         private static void DrawLegendRow(float x, float y, Color color, string label)
         {
             DrawFilledRect(new Rect(x, y + 4f, 18f, 3f), color);
-            GUI.Label(new Rect(x + 25f, y - 2f, 120f, 18f), label, CombatManagerTheme.Mini);
+            GUI.Label(new Rect(x + 25f, y - 3f, 120f, 20f), label, CombatManagerTheme.GridLabel);
         }
 
         private static void DrawLabel(Vector2 position, string label)
         {
-            GUI.Label(new Rect(position.x, position.y, 320f, 18f), label, CombatManagerTheme.Mini);
+            GUIContent content = new GUIContent(label);
+            Vector2 size = CombatManagerTheme.GridLabel.CalcSize(content);
+            Rect rect = new Rect(position.x, position.y, Mathf.Min(size.x + 12f, 360f), 22f);
+            DrawFilledRect(rect, LabelBack);
+            GUI.Label(rect, content, CombatManagerTheme.GridLabel);
         }
 
         private static void DrawDiamond(Vector2 center, float radius, Color color)
