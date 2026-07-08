@@ -42,10 +42,11 @@ namespace CombatManager.Ui
 
             if (frame.HasDesiredPoint)
             {
-                Vector2 desired = projection.WorldToScreen(frame.DesiredPoint);
+                Vector3 point = frame.HasMotionPoint ? frame.MotionPoint : frame.DesiredPoint;
+                Vector2 desired = projection.WorldToScreen(point);
                 DrawPointMarker(desired, DesiredPoint);
                 DrawLine(projection.WorldToScreen(frame.CraftPosition), desired, DesiredPoint, 1f);
-                DrawLabel(desired + new Vector2(12f, -20f), "AI steer point");
+                DrawLabel(desired + new Vector2(12f, -20f), "AI motion point");
             }
 
             Vector2 craft = projection.WorldToScreen(frame.CraftPosition);
@@ -217,7 +218,7 @@ namespace CombatManager.Ui
             GUI.Label(new Rect(legend.x + 8f, legend.y + 6f, 120f, 18f), "Legend", CombatManagerTheme.Mini);
             DrawLegendRow(legend.x + 8f, legend.y + 26f, CombatManagerTheme.Craft, "Heading");
             DrawLegendRow(legend.x + 8f, legend.y + 44f, CombatManagerTheme.Intent, "Travel");
-            DrawLegendRow(legend.x + 8f, legend.y + 62f, DesiredPoint, "AI steer");
+            DrawLegendRow(legend.x + 8f, legend.y + 62f, DesiredPoint, "AI motion");
             DrawLegendRow(legend.x + 8f, legend.y + 80f, TargetPath, "Target path");
         }
 

@@ -119,7 +119,7 @@ namespace CombatManager.Ai
             ResetTargetPath();
             ResetCraft();
             DesiredTrail.Clear();
-            AddDesiredTrailPoint(BuildFrame().DesiredPoint);
+            AddDesiredTrailPoint(FrameMotionPoint(BuildFrame()));
         }
 
         internal void ResetTargetPath()
@@ -159,7 +159,7 @@ namespace CombatManager.Ai
 
             AddTrailPoint(CraftPosition);
             AddTargetTrailPoint(TargetPosition);
-            AddDesiredTrailPoint(updatedFrame.DesiredPoint);
+            AddDesiredTrailPoint(FrameMotionPoint(updatedFrame));
             UpdateOrbitAngle();
         }
 
@@ -171,7 +171,7 @@ namespace CombatManager.Ai
             Preset = preset;
             ResetCraft();
             DesiredTrail.Clear();
-            AddDesiredTrailPoint(BuildFrame().DesiredPoint);
+            AddDesiredTrailPoint(FrameMotionPoint(BuildFrame()));
         }
 
         internal void SetTargetProfile(AiTargetProfile profile)
@@ -360,6 +360,7 @@ namespace CombatManager.Ai
             float approachAngle = GetCircleApproachAngle(target);
             Vector3 desiredTravel = PlanarMath.RotateYaw(target.DirectionFlat, approachAngle);
             Vector3 desiredPoint = CraftPosition + desiredTravel * 1000f;
+            Vector3 motionPoint = BuildCircleMotionPoint(target, desiredTravel);
             return BuildCommonFrame(
                 target,
                 desiredPoint,
@@ -368,7 +369,9 @@ namespace CombatManager.Ai
                 "Circle",
                 $"Circle {Radius:0.#}m vs {TargetProfileName()} {TargetSpeed:0.#}m/s",
                 approximate: false,
-                state: $"approach {approachAngle:0.#} deg");
+                state: $"approach {approachAngle:0.#} deg",
+                broadsideAngle: 0f,
+                motionPoint: motionPoint);
         }
 
         private AiSimulationFrame BuildPointAtFrame(SyntheticTargetInfo target)
@@ -455,6 +458,31 @@ namespace CombatManager.Ai
             string state,
             float broadsideAngle = 0f)
         {
+            return BuildCommonFrame(
+                target,
+                desiredPoint,
+                desiredFacing,
+                desiredTravel,
+                kind,
+                summary,
+                approximate,
+                state,
+                broadsideAngle,
+                desiredPoint);
+        }
+
+        private AiSimulationFrame BuildCommonFrame(
+            SyntheticTargetInfo target,
+            Vector3 desiredPoint,
+            Vector3 desiredFacing,
+            Vector3 desiredTravel,
+            string kind,
+            string summary,
+            bool approximate,
+            string state,
+            float broadsideAngle,
+            Vector3 motionPoint)
+        {
             return new AiSimulationFrame
             {
                 Preset = Preset,
@@ -465,6 +493,7 @@ namespace CombatManager.Ai
                 CraftVelocity = CraftVelocity,
                 CraftHeading = CraftHeading,
                 DesiredPoint = desiredPoint,
+                MotionPoint = motionPoint,
                 DesiredFacing = PlanarMath.SafePlanarDirection(Vector3.zero, desiredFacing, CraftHeading),
                 DesiredTravel = PlanarMath.Flatten(desiredTravel),
                 ToTarget = target.DirectionFlat,
@@ -481,8 +510,20 @@ namespace CombatManager.Ai
                 CraftMovementModel = CraftMovementModelName(),
                 Approximate = approximate,
                 HasDesiredPoint = true,
+                HasMotionPoint = true,
                 HasDesiredFacing = true
             };
+        }
+
+        private Vector3 BuildCircleMotionPoint(SyntheticTargetInfo target, Vector3 desiredTravel)
+        {
+            Vector3 fromTarget = PlanarMath.SafePlanarDirection(TargetPosition, CraftPosition, -target.DirectionFlat);
+            Vector3 motionDirection = PlanarMath.SafePlanarDirection(Vector3.zero, desiredTravel, CraftHeading);
+            float radius = Mathf.Max(10f, Radius);
+            float lookAhead = Mathf.Clamp(Mathf.Max(90f, CraftSpeed * 3f), 90f, Mathf.Max(120f, radius * 0.8f));
+            Vector3 point = TargetPosition + fromTarget * radius + motionDirection * lookAhead;
+            point.y = CraftPosition.y;
+            return point;
         }
 
         private float GetCircleApproachAngle(SyntheticTargetInfo target)
@@ -548,14 +589,15 @@ namespace CombatManager.Ai
 
         private void AdvanceCraft(AiSimulationFrame frame, float delta)
         {
-            Vector3 toGoal = PlanarMath.Flatten(frame.DesiredPoint - CraftPosition);
+            Vector3 goal = FrameMotionPoint(frame);
+            Vector3 toGoal = PlanarMath.Flatten(goal - CraftPosition);
             float distance = toGoal.magnitude;
             Vector3 desiredMoveDirection = distance > 0.1f ? toGoal.normalized : Vector3.zero;
             Vector3 desiredHeading = DesiredCraftHeading(frame, desiredMoveDirection);
             CraftHeading = RotateTowardsFlat(CraftHeading, desiredHeading, CraftTurnRate * delta);
 
             Vector3 moveDirection = CraftMoveDirection(desiredMoveDirection);
-            float desiredSpeed = CraftSpeed * CraftThrottle(distance, desiredMoveDirection);
+            float desiredSpeed = CraftSpeed * CraftThrottle01(distance, desiredMoveDirection);
             CraftCurrentSpeed = Mathf.MoveTowards(CraftCurrentSpeed, desiredSpeed, CraftAcceleration * delta);
 
             float travel = CraftCurrentSpeed * delta;
@@ -592,22 +634,27 @@ namespace CombatManager.Ai
             return CraftHeading;
         }
 
-        private float CraftThrottle(float distance, Vector3 desiredMoveDirection)
+        private float CraftThrottle01(float distance, Vector3 desiredMoveDirection)
         {
             if (distance <= 1f || desiredMoveDirection.sqrMagnitude < 0.0001f)
                 return 0f;
 
             float distanceScale = Mathf.Clamp01(distance / 120f);
             if (CraftMovementModel == AiCraftMovementModel.HoverSixAxis)
-                return CraftSpeed * distanceScale;
+                return distanceScale;
             if (CraftMovementModel == AiCraftMovementModel.Airplane)
-                return CraftSpeed * Mathf.Lerp(0.55f, 1f, distanceScale);
+                return Mathf.Lerp(0.55f, 1f, distanceScale);
 
             float absAngle = Mathf.Abs(PlanarMath.SignedPlanarAngle(CraftHeading, desiredMoveDirection));
             float turnScale = absAngle <= 50f
                 ? 1f
                 : Mathf.Lerp(1f, 0.2f, Mathf.Clamp01((absAngle - 50f) / 85f));
-            return CraftSpeed * distanceScale * turnScale;
+            return distanceScale * turnScale;
+        }
+
+        private static Vector3 FrameMotionPoint(AiSimulationFrame frame)
+        {
+            return frame.HasMotionPoint ? frame.MotionPoint : frame.DesiredPoint;
         }
 
         private static Vector3 RotateTowardsFlat(Vector3 current, Vector3 desired, float maxDegrees)
@@ -664,6 +711,7 @@ namespace CombatManager.Ai
         internal Vector3 CraftVelocity;
         internal Vector3 CraftHeading;
         internal Vector3 DesiredPoint;
+        internal Vector3 MotionPoint;
         internal Vector3 DesiredFacing;
         internal Vector3 DesiredTravel;
         internal Vector3 ToTarget;
@@ -680,6 +728,7 @@ namespace CombatManager.Ai
         internal string CraftMovementModel;
         internal bool Approximate;
         internal bool HasDesiredPoint;
+        internal bool HasMotionPoint;
         internal bool HasDesiredFacing;
     }
 

@@ -15,6 +15,8 @@ namespace CombatManager.Verification
                 RotateYawMatchesUnityTopDownConvention();
                 GroundDistanceUsesOnlyXZ();
                 CraftMovesDuringCircleSimulation();
+                CircleMotionPointStaysFinite();
+                CircleCraftSpeedStaysCapped();
                 TargetProjectionStaysCentered();
                 OrbitRingFitsResizeBounds();
                 RectangularProjectionKeepsTargetCentered();
@@ -88,6 +90,53 @@ namespace CombatManager.Verification
 
             if (PlanarMath.GroundDistance(before, state.CraftPosition) <= 0.1f)
                 throw new InvalidOperationException("circle simulation did not move the craft");
+        }
+
+        private static void CircleMotionPointStaysFinite()
+        {
+            var state = new AiSimulationState
+            {
+                Preset = AiSimulationPreset.Circle,
+                Side = AiSimulationSide.Left,
+                Radius = 200f,
+                CraftSpeed = 45f
+            };
+            state.SetTargetProfile(AiTargetProfile.Static);
+            state.Reset();
+
+            AiSimulationFrame frame = state.BuildFrame();
+            float rawSteerDistance = PlanarMath.GroundDistance(frame.CraftPosition, frame.DesiredPoint);
+            float motionDistance = PlanarMath.GroundDistance(frame.CraftPosition, frame.MotionPoint);
+
+            if (rawSteerDistance < 900f)
+                throw new InvalidOperationException($"circle raw steer point unexpectedly short: {rawSteerDistance}");
+            if (motionDistance > 220f)
+                throw new InvalidOperationException($"circle motion point is too far for sandbox pursuit: {motionDistance}");
+        }
+
+        private static void CircleCraftSpeedStaysCapped()
+        {
+            var state = new AiSimulationState
+            {
+                Preset = AiSimulationPreset.Circle,
+                Side = AiSimulationSide.Left,
+                Radius = 200f,
+                CraftSpeed = 45f,
+                CraftAcceleration = 500f,
+                CraftTurnRate = 180f,
+                CraftMovementModel = AiCraftMovementModel.ShipOrTank
+            };
+            state.SetTargetProfile(AiTargetProfile.Static);
+            state.Reset();
+
+            for (int i = 0; i < 160; i++)
+                state.Step(0.1f);
+
+            if (state.CraftCurrentSpeed > state.CraftSpeed + 0.001f)
+            {
+                throw new InvalidOperationException(
+                    $"craft speed exceeded configured max: {state.CraftCurrentSpeed} > {state.CraftSpeed}");
+            }
         }
 
         private static void TargetProjectionStaysCentered()
