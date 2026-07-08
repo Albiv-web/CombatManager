@@ -12,5 +12,9 @@
       <HintPath>$(FTD_DIR)\From_The_Depths_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
       <Private>true</Private>
     </Reference>
+    <Reference Include="Ai">
+      <HintPath>$(FTD_DIR)\From_The_Depths_Data\Managed\Ai.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
   </ItemGroup>
 </Project>

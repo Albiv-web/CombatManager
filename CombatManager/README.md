@@ -1,10 +1,10 @@
 # CombatManager
 
-CombatManager adds a passive AI intent visualizer for From The Depths.
+CombatManager adds a standalone AI movement sandbox for From The Depths.
 
-Open it in build mode with `Ctrl+Shift+C`. The overlay shows AI mainframes,
-selected behaviour/manoeuvre routines, a top-down target/craft grid, desired
-steer point, facing, read-only routine parameters, and current movement
-requests.
+Open it with `Ctrl+Shift+C`. The overlay shows a large target-centered 2D grid
+with circle, point-at, and broadside presets. `Import Current AI` can copy
+supported settings from the focused craft once, but the sandbox then runs
+independently and remains read-only toward the real craft.
 
-Version: 0.1.0
+Version: 0.1.1

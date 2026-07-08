@@ -37,18 +37,12 @@ namespace CombatManager.Ui
                     return;
                 }
 
-                if (!CombatManagerInputState.IsInBuildModeWithConstruct())
-                {
-                    ForceClose();
-                    return;
-                }
-
                 _session.Tick();
             }
             catch (Exception exception)
             {
                 AdvLogger.LogException(
-                    "[CombatManager] AI intent visualizer update failed",
+                    "[CombatManager] AI sandbox update failed",
                     exception,
                     LogOptions._AlertDevAndCustomerInGame);
                 ForceClose();
@@ -64,7 +58,7 @@ namespace CombatManager.Ui
             catch (Exception exception)
             {
                 AdvLogger.LogException(
-                    "[CombatManager] AI intent visualizer GUI failed",
+                    "[CombatManager] AI sandbox GUI failed",
                     exception,
                     LogOptions._AlertDevAndCustomerInGame);
                 ForceClose();
@@ -76,13 +70,13 @@ namespace CombatManager.Ui
             if (Active)
             {
                 ForceClose();
-                InfoStore.Add("CombatManager AI visualizer closed.");
+                InfoStore.Add("CombatManager AI sandbox closed.");
                 return;
             }
 
             _session = new CombatManagerSession();
             _session.Begin();
-            InfoStore.Add("CombatManager AI visualizer opened.");
+            InfoStore.Add("CombatManager AI sandbox opened.");
         }
     }
 }

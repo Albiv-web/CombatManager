@@ -1,3 +1,8 @@
 0.1.0
 - Initial CombatManager mod shell.
 - Added passive AI intent visualizer toggled with Ctrl+Shift+C in build mode.
+
+0.1.1
+- Converted the overlay into a standalone AI sandbox.
+- Added target-centered circle, point-at, and broadside presets.
+- Added one-shot Import Current AI seeding and a resizable grid-first UI.

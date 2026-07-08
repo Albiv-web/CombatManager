@@ -23,8 +23,7 @@ namespace CombatManager.Input
         internal static bool CanUseHotkeys()
         {
             return AllGameControlsEnabled() &&
-                   !IsTextInputActive() &&
-                   IsInBuildModeWithConstruct();
+                   !IsTextInputActive();
         }
 
         internal static bool IsInBuildModeWithConstruct()

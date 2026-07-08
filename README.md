@@ -1,8 +1,8 @@
 # CombatManager
 
 CombatManager is a From The Depths mod based on the working structure of
-EndlessShapes Unlimited. V1 adds a passive AI intent visualizer for inspecting
-what the focused craft's mainframe is trying to do.
+EndlessShapes Unlimited. V1.1 adds a standalone AI movement sandbox for
+previewing what common combat behaviours look like around a target.
 
 - `plugin.json` tells From The Depths which assembly to load.
 - `CombatManager.dll` contains a `GamePlugin_PostLoad` implementation and the
@@ -41,19 +41,19 @@ This installs the staged runtime folder to:
 C:\Users\<you>\Documents\From The Depths\Mods\CombatManager
 ```
 
-## AI Intent Visualizer
+## AI Sandbox
 
-In build mode on a craft, press `Ctrl+Shift+C` to open/close the visualizer.
+Press `Ctrl+Shift+C` to open/close the sandbox. The hotkey is guarded against
+text input, but it no longer depends on a focused craft or build mode.
 
-The V1 overlay is read-only. It shows:
+The V1.1 overlay is read-only toward the real game. It shows:
 
-- AI mainframes on the focused craft.
-- Selected behaviour and manoeuvre routines.
-- A top-down X/Z grid with craft, target, desired steer point, desired facing,
-  maintain-distance rings, and current movement requests.
-- Passive predictions for Broadside 2.0/naval, broadside, point-at, and circle
-  behaviours.
-- A draggable sandbox target when the AI has no live target.
+- A large target-centered top-down X/Z grid.
+- Circle, point-at, and broadside behaviour presets.
+- Simulated craft marker movement, heading, tangent travel direction, range
+  ring, range label, and ghost trail.
+- Playback controls for play, pause, step, and reset.
+- Optional one-shot `Import Current AI` seeding from the focused craft.
 
-Unsupported behaviours still show routine names, warnings, and current control
-requests without trying to guess their logic.
+Imported AI settings are copied once into the sandbox. The mod does not keep
+scanning the craft, change targets, or write card/mainframe values.
