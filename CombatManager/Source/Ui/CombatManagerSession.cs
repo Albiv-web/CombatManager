@@ -20,6 +20,7 @@ namespace CombatManager.Ui
         private Vector2 _redAiScroll;
         private Vector2 _redMoveScroll;
         private Vector2 _redStatusScroll;
+        private float _lastLiveParityRead = -100f;
 
         internal bool Active => _active;
 
@@ -65,6 +66,7 @@ namespace CombatManager.Ui
 
         private void DrawEditor(CombatManagerEditorLayout layout)
         {
+            RefreshLiveParityIfNeeded(force: false);
             DrawFullscreenBackdrop(layout.Root);
 
             AiDuelFrame frame = _state.BuildDuelFrame();
@@ -523,6 +525,9 @@ namespace CombatManager.Ui
                 _state.BlueExportPlan = AiBlueprintExportPlanner.Build(GetFocusedConstruct(), _state.BlueBlueprint, _state.SelectedImportIndex);
             DrawExportPreview(_state.BlueExportPlan);
 
+            GUILayout.Space(8f);
+            DrawLiveParityDrawer();
+
             if (!_state.ShowImportDetails)
                 return;
 
@@ -567,6 +572,80 @@ namespace CombatManager.Ui
                 foreach (AiControlRequestSnapshot request in _state.ImportedRequests)
                     GUILayout.Label($"{request.Type}: {request.Value:0.00}", CombatManagerTheme.Body);
             }
+        }
+
+        private void DrawLiveParityDrawer()
+        {
+            GUILayout.Label("Live Parity", CombatManagerTheme.Header);
+            GUILayout.Label("Read-only comparison against the focused craft's current AI requests.", CombatManagerTheme.BodyWrap);
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button(_state.LiveParityEnabled ? "Disable" : "Enable", _state.LiveParityEnabled ? CombatManagerTheme.ActiveButton : CombatManagerTheme.Button))
+            {
+                _state.LiveParityEnabled = !_state.LiveParityEnabled;
+                if (_state.LiveParityEnabled)
+                    RefreshLiveParityIfNeeded(force: true);
+                else
+                    _state.LiveParityStatus = "Live Parity is off.";
+            }
+
+            if (GUILayout.Button("Capture Once", CombatManagerTheme.Button))
+                RefreshLiveParityIfNeeded(force: true);
+            GUILayout.EndHorizontal();
+
+            GUILayout.Label(_state.LiveParityStatus, _state.LiveParityEnabled ? CombatManagerTheme.Warning : CombatManagerTheme.BodyWrap);
+            AiLiveParitySnapshot parity = _state.LiveParity;
+            if (parity == null)
+            {
+                GUILayout.Label("No parity snapshot captured yet.", CombatManagerTheme.Mini);
+                return;
+            }
+
+            LabelPair("Mainframe", parity.MainframeName);
+            LabelPair("Behaviour", parity.BehaviourType);
+            LabelPair("Move", parity.ManoeuvreType);
+            if (parity.PredictedIntent != null)
+            {
+                GUILayout.Label(parity.PredictedIntent.Summary, CombatManagerTheme.BodyWrap);
+                GUILayout.Label($"range {parity.PredictedIntent.Range:0.#}m | azimuth {parity.PredictedIntent.Azimuth:0.#} deg | state {parity.PredictedIntent.State}", CombatManagerTheme.Mini);
+            }
+
+            GUILayout.Space(4f);
+            GUILayout.Label("Observed vs predicted requests", CombatManagerTheme.Mini);
+            if (parity.RequestDeltas.Count == 0)
+            {
+                GUILayout.Label("No non-zero observed or predicted requests.", CombatManagerTheme.BodyWrap);
+            }
+            else
+            {
+                int rows = Mathf.Min(8, parity.RequestDeltas.Count);
+                for (int i = 0; i < rows; i++)
+                {
+                    AiControlRequestDelta delta = parity.RequestDeltas[i];
+                    GUILayout.Label($"{delta.Type}: obs {delta.Observed:0.00} | pred {delta.Predicted:0.00} | delta {delta.Delta:+0.00;-0.00;0.00}", CombatManagerTheme.Body);
+                }
+            }
+
+            if (parity.Warnings.Count > 0)
+            {
+                GUILayout.Space(4f);
+                GUILayout.Label("Warnings", CombatManagerTheme.Mini);
+                foreach (string warning in parity.Warnings)
+                    GUILayout.Label(warning, CombatManagerTheme.Warning);
+            }
+        }
+
+        private void RefreshLiveParityIfNeeded(bool force)
+        {
+            if (!_state.LiveParityEnabled && !force)
+                return;
+
+            float now = Time.unscaledTime;
+            if (!force && now - _lastLiveParityRead < 0.25f)
+                return;
+
+            _lastLiveParityRead = now;
+            _state.LiveParity = AiLiveParityCollector.Capture(GetFocusedConstruct(), _state.SelectedImportIndex);
+            _state.LiveParityStatus = _state.LiveParity.Status;
         }
 
         private static void DrawExportPreview(AiBlueprintExportPlan plan)

@@ -249,11 +249,14 @@ namespace CombatManager.Ai
         internal bool ShowMotionPoint { get; set; } = true;
         internal bool ShowLegend { get; set; } = true;
         internal bool ShowImportDetails { get; set; }
+        internal bool LiveParityEnabled { get; set; }
 
         internal string ImportStatus { get; set; } = "Standalone duel sandbox. Blue import is optional.";
         internal string ImportedBehaviour { get; set; }
         internal string ImportedManoeuvre { get; set; }
         internal string ImportedMainframe { get; set; }
+        internal string LiveParityStatus { get; set; } = "Live Parity is off.";
+        internal AiLiveParitySnapshot LiveParity { get; set; }
         internal int SelectedImportIndex { get; set; } = -1;
 
         internal List<AiImportCandidate> ImportCandidates { get; } = new List<AiImportCandidate>();
@@ -625,7 +628,7 @@ namespace CombatManager.Ai
         private AiSimulationFrame BuildEntityFrame(AiSimEntity entity, AiSimEntity target, AiPlanInput input)
         {
             AiBehaviourPlan plan = AiBehaviourPlanner.Plan(input);
-            return new AiSimulationFrame
+            AiSimulationFrame frame = new AiSimulationFrame
             {
                 Role = entity.Role,
                 EntityName = entity.Name,
@@ -661,8 +664,13 @@ namespace CombatManager.Ai
                 HasRawSteerPoint = plan.HasRawSteerPoint,
                 HasMotionPoint = plan.HasMotionPoint,
                 HasDesiredFacing = plan.HasDesiredFacing,
-                ReversePreferred = plan.ReversePreferred
+                ReversePreferred = plan.ReversePreferred,
+                PredictedRequests = new List<AiControlRequestPrediction>()
             };
+            frame.PredictedRequests.AddRange(AiVanillaPredictor.PredictRequests(
+                AiMovementRequestContext.FromEntity(entity),
+                AiVanillaPredictor.FromSimulationFrame(frame)));
+            return frame;
         }
 
         private static string MovementApproximationNote(AiSimEntity entity, AiBehaviourPlan plan)
@@ -755,6 +763,7 @@ namespace CombatManager.Ai
         internal bool HasMotionPoint;
         internal bool HasDesiredFacing;
         internal bool ReversePreferred;
+        internal List<AiControlRequestPrediction> PredictedRequests;
     }
 
     internal struct AiSimulationGridProjection

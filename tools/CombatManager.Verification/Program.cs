@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using BrilliantSkies.Ai.Interfaces;
 using CombatManager.Ai;
 using CombatManager.Ui;
 using UnityEngine;
@@ -37,6 +39,12 @@ namespace CombatManager.Verification
                 BlueprintExportPreviewHandlesNoFocusedCraft();
                 BlueprintExportPreviewClassifiesUnsupportedPresets();
                 BlueprintCaptureDoesNotChangePlannerFrame();
+                VanillaShipRequestPredictionMatchesSteerSign();
+                VanillaShipTarryPredictsVelocityCancel();
+                VanillaHoverAndSixAxisPredictIndependentAxes();
+                VanillaAirplanePredictsForwardBankAndAltitude();
+                LiveParityHandlesNoFocusedCraft();
+                LiveParityNullReadDoesNotMutateSandboxState();
                 Console.WriteLine("CombatManager verification passed.");
                 return 0;
             }
@@ -392,6 +400,85 @@ namespace CombatManager.Verification
             AssertNear(before.Blue.MotionPoint.z, after.Blue.MotionPoint.z, "blue motion point z after blueprint capture");
         }
 
+        private static void VanillaShipRequestPredictionMatchesSteerSign()
+        {
+            AiMovementRequestContext context = RequestContext(AiCraftMovementModel.ShipOrTank);
+            AiVanillaIntentPlan intent = IntentAt(new Vector3(100f, 0f, 100f));
+            List<AiControlRequestPrediction> requests = AiVanillaPredictor.PredictRequests(context, intent);
+
+            if (PredictionValue(requests, AiControlType.ThrustForward) <= 0f)
+                throw new InvalidOperationException("ship/tank did not predict forward thrust toward a forward steer point");
+            if (PredictionValue(requests, AiControlType.YawRight) <= 0f)
+                throw new InvalidOperationException("ship/tank did not predict yaw right for a right-side steer point");
+            if (PredictionValue(requests, AiControlType.YawLeft) > 0f)
+                throw new InvalidOperationException("ship/tank predicted both yaw directions");
+        }
+
+        private static void VanillaShipTarryPredictsVelocityCancel()
+        {
+            AiMovementRequestContext context = RequestContext(AiCraftMovementModel.ShipOrTank);
+            context.TarryDistance = 50f;
+            context.CraftVelocity = Vector3.forward * 12f;
+            AiVanillaIntentPlan intent = IntentAt(new Vector3(0f, 0f, 10f));
+            List<AiControlRequestPrediction> requests = AiVanillaPredictor.PredictRequests(context, intent);
+
+            if (PredictionValue(requests, AiControlType.ThrustBackward) <= 0f)
+                throw new InvalidOperationException("ship/tank tarry prediction did not request reverse thrust to cancel forward velocity");
+        }
+
+        private static void VanillaHoverAndSixAxisPredictIndependentAxes()
+        {
+            AiMovementRequestContext hover = RequestContext(AiCraftMovementModel.Hover);
+            hover.HoverMoveWithinAzimuth = 180f;
+            AiVanillaIntentPlan intent = IntentAt(new Vector3(80f, 30f, 120f));
+            List<AiControlRequestPrediction> hoverRequests = AiVanillaPredictor.PredictRequests(hover, intent);
+            if (PredictionValue(hoverRequests, AiControlType.StrafeRight) <= 0f || PredictionValue(hoverRequests, AiControlType.HoverUp) <= 0f)
+                throw new InvalidOperationException("hover prediction did not request independent strafe/hover axes");
+
+            AiMovementRequestContext sixAxis = RequestContext(AiCraftMovementModel.SixAxis);
+            List<AiControlRequestPrediction> sixAxisRequests = AiVanillaPredictor.PredictRequests(sixAxis, intent);
+            if (PredictionValue(sixAxisRequests, AiControlType.ThrustForward) <= 0f || PredictionValue(sixAxisRequests, AiControlType.StrafeRight) <= 0f)
+                throw new InvalidOperationException("six-axis prediction did not request independent forward/strafe axes");
+        }
+
+        private static void VanillaAirplanePredictsForwardBankAndAltitude()
+        {
+            AiMovementRequestContext context = RequestContext(AiCraftMovementModel.Airplane);
+            context.AirplaneBankingTurnAbove = 5f;
+            context.AirplaneBankingTurnRoll = 45f;
+            AiVanillaIntentPlan intent = IntentAt(new Vector3(-100f, 40f, 200f));
+            List<AiControlRequestPrediction> requests = AiVanillaPredictor.PredictRequests(context, intent);
+
+            if (PredictionValue(requests, AiControlType.ThrustForward) <= 0f)
+                throw new InvalidOperationException("airplane prediction did not request forward thrust");
+            if (PredictionValue(requests, AiControlType.RollLeft) <= 0f)
+                throw new InvalidOperationException("airplane prediction did not request left bank for a left steer point");
+            if (PredictionValue(requests, AiControlType.PitchUp) <= 0f)
+                throw new InvalidOperationException("airplane prediction did not request pitch up for a higher steer point");
+        }
+
+        private static void LiveParityHandlesNoFocusedCraft()
+        {
+            AiLiveParitySnapshot snapshot = AiLiveParityCollector.Capture(null, -1);
+            if (snapshot.HasFocusedConstruct || snapshot.HasMainframe || snapshot.HasTarget)
+                throw new InvalidOperationException("null live parity capture reported live craft state");
+            if (snapshot.Warnings.Count == 0)
+                throw new InvalidOperationException("null live parity capture did not produce a warning");
+        }
+
+        private static void LiveParityNullReadDoesNotMutateSandboxState()
+        {
+            var state = new AiSimulationState();
+            AiSimulationPreset bluePreset = state.Blue.Preset;
+            AiSimulationPreset redPreset = state.Red.Preset;
+            string blueName = state.BlueBlueprint.MainframeName;
+            AiLiveParitySnapshot snapshot = AiLiveParityCollector.Capture(null, state.SelectedImportIndex);
+            state.LiveParity = snapshot;
+
+            if (state.Blue.Preset != bluePreset || state.Red.Preset != redPreset || state.BlueBlueprint.MainframeName != blueName)
+                throw new InvalidOperationException("live parity read mutated sandbox or blueprint state");
+        }
+
         private static void ConfigureSymmetricPointAt(AiSimEntity entity)
         {
             entity.ApplyCraftProfile(AiCraftProfile.SurfaceShip);
@@ -431,6 +518,66 @@ namespace CombatManager.Verification
             state.ResetScenario();
             state.Blue.Radius = 460f;
             return state;
+        }
+
+        private static AiMovementRequestContext RequestContext(AiCraftMovementModel model)
+        {
+            return new AiMovementRequestContext
+            {
+                Model = model,
+                SourceManoeuvre = model.ToString(),
+                CraftPosition = Vector3.zero,
+                CraftHeading = Vector3.forward,
+                CraftVelocity = Vector3.zero,
+                CraftAltitude = 0f,
+                TarryDistance = 0f,
+                ReverseAllowed = true,
+                HoverYawLockDistance = 150f,
+                HoverMoveWithinAzimuth = 30f,
+                SixAxisLookAheadDistance = 50f,
+                AirplaneIdleThrust = 100f,
+                AirplaneIdleDistance = 300f,
+                AirplaneBankingTurnAbove = 30f,
+                AirplaneBankingTurnRoll = 45f,
+                AirplanePitchForAltitude = 15f
+            };
+        }
+
+        private static AiVanillaIntentPlan IntentAt(Vector3 point)
+        {
+            Vector3 flat = PlanarMath.SafePlanarDirection(Vector3.zero, point, Vector3.forward);
+            return new AiVanillaIntentPlan
+            {
+                Supported = true,
+                BehaviourClass = "Synthetic",
+                Kind = "Synthetic",
+                Summary = "synthetic request prediction intent",
+                State = "test",
+                RawSteerPoint = point,
+                MotionPoint = point,
+                DesiredFacing = flat,
+                DesiredTravel = flat,
+                Range = point.magnitude,
+                GroundRange = PlanarMath.Flatten(point).magnitude,
+                Azimuth = PlanarMath.SignedPlanarAngle(Vector3.forward, flat),
+                MaintainDistanceLower = point.magnitude,
+                MaintainDistanceUpper = point.magnitude,
+                HasRawSteerPoint = true,
+                HasMotionPoint = true,
+                HasDesiredFacing = true
+            };
+        }
+
+        private static float PredictionValue(List<AiControlRequestPrediction> requests, AiControlType type)
+        {
+            float value = 0f;
+            foreach (AiControlRequestPrediction request in requests)
+            {
+                if (request.Type == type)
+                    value = Math.Max(value, request.Value);
+            }
+
+            return value;
         }
 
         private static void AssertNear(float expected, float actual, string name)

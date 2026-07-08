@@ -140,9 +140,7 @@ namespace CombatManager.Ai
             float facing = reversing
                 ? Mathf.Abs(PlanarMath.SignedPlanarAngle(-entity.Heading, desiredMoveDirection))
                 : Mathf.Abs(PlanarMath.SignedPlanarAngle(entity.Heading, desiredMoveDirection));
-            float turnScale = facing <= 50f
-                ? 1f
-                : Mathf.Lerp(1f, 0.2f, Mathf.Clamp01((facing - 50f) / 85f));
+            float turnScale = AiVanillaPredictor.ShipTurnThrottle01(facing);
 
             if (reversing)
                 turnScale *= 0.65f;

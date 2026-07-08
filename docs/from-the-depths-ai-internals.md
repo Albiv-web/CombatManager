@@ -606,19 +606,97 @@ V1.9 fixes an Auto/Both broadside stability bug:
   `FtdLegacyCommon.state`: broadside side is part of behaviour state, not just a
   fresh UI preference calculation each rendered frame.
 
+V2.0 adds a read-only parity harness and focused vanilla request mapping:
+
+- `AiVanillaIntentPlan` is now the shared representation for supported
+  behaviour intent. It carries the behaviour class, raw steer point, finite
+  motion point, desired facing, range/azimuth, state/side, and approximation
+  flags. The old live import predictor delegates through this same layer.
+- `AiControlRequestPrediction` models the movement-card output layer: predicted
+  `AiControlType`, value, source manoeuvre, confidence, and note.
+- `AiLiveParitySnapshot` reads the focused construct, selected mainframe,
+  selected behaviour/manoeuvre, target snapshot, craft pose/velocity, and the
+  platform's current non-zero requests. It then predicts from the same snapshot
+  and lists observed-vs-predicted deltas. It does not call `IBehaviour.Move`,
+  does not call manoeuvre `Move`, and does not write requests or package state.
+- The fidelity claim is now explicit: CombatManager targets vanilla behaviour
+  intent plus movement-request parity. Exact propulsion layout, drag, block
+  placement, terrain collision, sea state, pathfinding, and PID time history
+  remain approximations unless the live parity deltas prove a mirrored mapping.
+
+Focused V2.0 decompile findings:
+
+- `FiringAngleCalculator` is used by broadside/Naval behaviour to test possible
+  firing angles. It builds a short test point from craft-to-target direction and
+  broadside angle, scales the firing angle around the midpoint between minimum
+  broadside range and enter-broadside range, pushes too-close points back out to
+  the minimum range, extends tiny waypoints to roughly 300m from the craft, and
+  rejects points that fail adjustment/depth checks. CombatManager labels this as
+  approximate because full firepower and sea-surface checks are not mirrored yet.
+- `Adjustment` and `WaypointRelocation` form the common waypoint post-processing
+  path. Behaviours produce candidate points, then adjustment can clamp altitude,
+  avoid terrain/water, relocate around land or sea constraints, and apply
+  bearing/pathfinding avoidance. CombatManager's 2D sandbox does not yet mutate
+  steer points through these world-dependent passes.
+- `MigratePack` stores default adjustment bundles used by manoeuvre/card
+  defaults. Ship/tank defaults are water-oriented, including OnWater altitude
+  reference, water depth, turning circle, and low max altitude; aerial defaults
+  raise altitude-oriented constraints.
+- `SeaSurfacePathfinding` is a world/path validity layer. It depends on the
+  map/terrain/sea surface and therefore cannot be treated as pure sandbox math.
+  V2.0 documents it but keeps sea-surface relocation marked approximate.
+- `AiVehicleManoeuvreCommonVariables` owns the common PID helpers that
+  manoeuvres use to emit `AiControlType` requests. Important sign mappings:
+  positive roll output requests `RollRight`; negative pitch output requests
+  `PitchUp`; yaw-to-zero output requests `YawLeft` when positive and `YawRight`
+  when negative; positive hover output requests `HoverUp`; forward/back speed
+  cancellation maps positive to `ThrustForward` and negative to
+  `ThrustBackward`. Defaults include a 20m translational request scale, 30m
+  terminal phase, and azimuth throttle drop-off helpers.
+- `FtdAiWrapper` is the bridge from AI logic to craft controls. `MakeRequest`
+  passes an `AiControlType` magnitude to `ControlsRestricted.MakeRequest`,
+  `GetRequest` reads the last input for that axis, and `SetRequest` overwrites a
+  request. Live Parity reads through this wrapper path only; it never writes.
+- `AiTargetManager` owns target lifecycle and selection around target priority,
+  validity, velocity, and engagement target data. V2.0 reads the selected
+  engagement target snapshot exposed by the mainframe node; it does not mirror
+  full target selection logic.
+
+V2.0 movement-request mappings:
+
+- Ship/tank (`FtdNavalAndLandManoeuvre`): when not idling, vanilla requests
+  `ThrustForward` or `ThrustBackward` and yaws toward zero azimuth, with forward
+  thrust reduced from 1.0 toward 0.2 between roughly 50 and 135 degrees of steer
+  azimuth. Inside tarry distance it yaws to desired end rotation and cancels
+  forward velocity. CombatManager mirrors the request signs and throttle curve,
+  while PID gains and velocity history remain approximate.
+- Hover (`ManoeuvreHover`): forward/back output follows local forward shift,
+  strafe follows local lateral shift, yaw follows desired rotation or waypoint
+  yaw, and altitude uses hover output. Above `MoveWithinAzi`, forward is reduced
+  to 30% and strafe is disabled. CombatManager mirrors these request channels
+  and labels exact PID magnitude approximate.
+- Six-axis (`ManoeuvreSixAxis`): local lateral shift maps to
+  strafe-left/right, local forward shift maps to thrust-forward/backward,
+  altitude maps to hover, and yaw follows look-ahead desired facing.
+  CombatManager mirrors those independent axes.
+- Airplane (`ManoeuvreAirplane` / `FtdAerialMovement`): forward thrust is
+  always requested, idle/placeholder distance can lower thrust, banked turns use
+  roll above a configured azimuth threshold, yaw follows waypoint angle, and
+  altitude feeds hover/pitch logic. CombatManager mirrors request signs and
+  major thresholds, while roll/pitch coupling remains approximate.
+
 ## Next Research Targets
 
-To improve fidelity, decompile and summarize these next:
+To improve fidelity further, decompile and summarize these next:
 
-- `FiringAngleCalculator`: exact broadside 2.0 firing-angle point selection.
-- `Adjustment` and `WaypointRelocation`: terrain, water, bearing, and altitude
-  point adjustment.
-- `SeaSurfacePathfinding`: water/terrain path validity.
-- `AiVehicleManoeuvreCommonVariables`: PID defaults and helper methods.
-- `FtdAiWrapper`: how the game maps `IPlatformInterface` requests into craft
-  control requests.
-- `AiTargetManager`: target selection, target velocity choice, and engagement
-  target lifecycle.
+- exact behaviour planners for aerial, attack-run, bombing, ram/charge, and
+  hover-above/below behaviours.
+- more `Adjustment` and `WaypointRelocation` branches around terrain, water,
+  bearing avoidance, and finite path relocation.
+- more `AiTargetManager` branches for target scoring, target velocity choice,
+  and target loss/retarget timing.
+- PID default values and time-history effects for request magnitudes once Live
+  Parity exposes stable deltas across real craft.
 
 ## Simulator Roadmap From This Research
 
