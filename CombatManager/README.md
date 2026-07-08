@@ -13,4 +13,4 @@ seed either side, `Import Blue AI` can copy supported settings from a selected
 mainframe on the focused craft once, and the Blue export preview shows the
 future vanilla mutations without writing to the real craft.
 
-Version: 0.1.8
+Version: 0.1.9

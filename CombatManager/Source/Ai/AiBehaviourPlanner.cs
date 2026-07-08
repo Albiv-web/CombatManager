@@ -46,6 +46,7 @@ namespace CombatManager.Ai
     internal static class AiBehaviourPlanner
     {
         private const float NavalPredictionFactor = 5f;
+        private const float AutoSideSwitchDeadbandDegrees = 12f;
 
         internal static AiBehaviourPlan Plan(AiPlanInput input)
         {
@@ -65,6 +66,9 @@ namespace CombatManager.Ai
 
         internal static AiSimulationNavalState AdvanceNavalState(AiPlanInput input)
         {
+            if (input.Preset == AiSimulationPreset.Broadside)
+                return ResolveBroadsideSide(input, BuildTargetInfo(input));
+
             if (input.Preset != AiSimulationPreset.NavalBroadside)
                 return input.NavalState;
 
@@ -72,11 +76,11 @@ namespace CombatManager.Ai
             float enterBelow = Mathf.Max(10f, input.Radius);
             float leaveAbove = Mathf.Max(enterBelow + 20f, input.BroadsideOuterRadius);
             if (input.NavalState == AiSimulationNavalState.Closing && target.Range <= enterBelow)
-                return ResolveNavalSide(input, target);
+                return ResolveBroadsideSide(input, target);
             if (input.NavalState != AiSimulationNavalState.Closing && target.Range >= leaveAbove)
                 return AiSimulationNavalState.Closing;
             if (input.NavalState != AiSimulationNavalState.Closing)
-                return ResolveNavalSide(input, target);
+                return ResolveBroadsideSide(input, target);
             return input.NavalState;
         }
 
@@ -129,7 +133,8 @@ namespace CombatManager.Ai
 
         private static AiBehaviourPlan PlanBroadside(AiPlanInput input, PlannerTargetInfo target)
         {
-            float signedAngle = input.BroadsideAngle * BroadsideSideSign(input, target);
+            AiSimulationNavalState resolvedState = ResolveBroadsideSide(input, target);
+            float signedAngle = input.BroadsideAngle * BroadsideSideSign(resolvedState);
             Vector3 broadsideForward = PlanarMath.RotateYaw(target.DirectionFlat, -signedAngle);
             Vector3 projected = input.CraftPosition + broadsideForward * 100f;
             Vector3 fromTarget = PlanarMath.Flatten(projected - input.TargetPosition);
@@ -175,7 +180,7 @@ namespace CombatManager.Ai
                     reversePreferred: false);
             }
 
-            AiSimulationNavalState resolvedState = ResolveNavalSide(input, target);
+            AiSimulationNavalState resolvedState = ResolveBroadsideSide(input, target);
             float desiredAngle = input.BroadsideAngle * (resolvedState == AiSimulationNavalState.BroadsideRight ? -1f : 1f);
             Vector3 fromTarget = -target.DirectionFlat;
             Vector3 rawSteer = input.TargetPosition + PlanarMath.RotateYaw(fromTarget, desiredAngle) * enterBelow;
@@ -272,27 +277,51 @@ namespace CombatManager.Ai
             return result;
         }
 
-        private static float BroadsideSideSign(AiPlanInput input, PlannerTargetInfo target)
+        private static float BroadsideSideSign(AiSimulationNavalState state)
         {
-            if (input.Side == AiSimulationSide.Left)
-                return 1f;
-            if (input.Side == AiSimulationSide.Right)
-                return -1f;
-            return target.Azimuth > 0f ? -1f : 1f;
+            return state == AiSimulationNavalState.BroadsideRight ? -1f : 1f;
         }
 
-        private static AiSimulationNavalState ResolveNavalSide(AiPlanInput input, PlannerTargetInfo target)
+        private static AiSimulationNavalState ResolveBroadsideSide(AiPlanInput input, PlannerTargetInfo target)
         {
             if (input.Side == AiSimulationSide.Left)
                 return AiSimulationNavalState.BroadsideLeft;
             if (input.Side == AiSimulationSide.Right)
                 return AiSimulationNavalState.BroadsideRight;
 
-            Vector3 predicted = target.Position + target.Velocity * NavalPredictionFactor;
-            Vector3 vector = PlanarMath.SafePlanarDirection(input.CraftPosition, predicted, target.DirectionFlat);
-            return PlanarMath.SignedPlanarAngle(vector, input.CraftHeading) < 0f
+            float sideScore = AutoBroadsideSideScore(input, target);
+            AiSimulationNavalState candidate = sideScore < 0f
                 ? AiSimulationNavalState.BroadsideRight
                 : AiSimulationNavalState.BroadsideLeft;
+
+            if (IsBroadsideSide(input.NavalState)
+                && candidate != input.NavalState
+                && IsAutoSideTie(sideScore))
+            {
+                return input.NavalState;
+            }
+
+            return candidate;
+        }
+
+        private static float AutoBroadsideSideScore(AiPlanInput input, PlannerTargetInfo target)
+        {
+            Vector3 predicted = target.Position + target.Velocity * NavalPredictionFactor;
+            Vector3 vector = PlanarMath.SafePlanarDirection(input.CraftPosition, predicted, target.DirectionFlat);
+            return PlanarMath.SignedPlanarAngle(vector, input.CraftHeading);
+        }
+
+        private static bool IsAutoSideTie(float sideScore)
+        {
+            float absolute = Mathf.Abs(PlanarMath.Fix180(sideScore));
+            float distanceToWrap = Mathf.Abs(180f - absolute);
+            return absolute < AutoSideSwitchDeadbandDegrees || distanceToWrap < AutoSideSwitchDeadbandDegrees;
+        }
+
+        private static bool IsBroadsideSide(AiSimulationNavalState state)
+        {
+            return state == AiSimulationNavalState.BroadsideLeft
+                || state == AiSimulationNavalState.BroadsideRight;
         }
 
         private static string NavalStateLabel(AiSimulationNavalState state)

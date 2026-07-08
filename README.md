@@ -1,7 +1,7 @@
 # CombatManager
 
 CombatManager is a From The Depths mod based on the working structure of
-EndlessShapes Unlimited. V1.8 presents a symmetric Blue-vs-Red AI duel sandbox
+EndlessShapes Unlimited. V1.9 presents a symmetric Blue-vs-Red AI duel sandbox
 with editable AI blueprints: Blue/player controls are tabbed on the left,
 Red/enemy controls are tabbed on the right, and the Red-centered tactical graph
 fills the middle. Blueprints mirror the vanilla mainframe, behaviour,
@@ -50,7 +50,7 @@ C:\Users\<you>\Documents\From The Depths\Mods\CombatManager
 Press `Ctrl+Shift+C` to open/close the sandbox. The hotkey is guarded against
 text input, but it no longer depends on a focused craft or build mode.
 
-The V1.8 editor is read-only toward the real game. It shows:
+The V1.9 editor is read-only toward the real game. It shows:
 
 - An opaque fullscreen Red-centered top-down X/Z tactical grid.
 - Tabbed Blue/player and Red/enemy panels with independent scrolling.
@@ -68,6 +68,8 @@ The V1.8 editor is read-only toward the real game. It shows:
   snipers, circle ships, aircraft interceptors, and preview-only close rammers.
 - A Blue export preview that lists the vanilla mainframe/card mutations a later
   guarded writer would apply, while explicitly performing no real writes.
+- Stable Auto/Both broadside side selection so Naval 2.0 does not flicker
+  between left/right intent when the target bearing is tied around 0/180 degrees.
 
 Imported AI settings are copied once into Blue. The mod does not keep scanning
 the craft, change targets, or write card/mainframe values.

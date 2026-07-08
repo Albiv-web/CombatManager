@@ -593,6 +593,19 @@ V1.8 adds an AI blueprint layer without adding writes:
   replacement prompt, no PID/common-variable writes, no additional routines,
   no breadboard writes, and no actual apply button.
 
+V1.9 fixes an Auto/Both broadside stability bug:
+
+- The sandbox previously re-ran broadside side selection as a stateless signed
+  angle test every frame. When the target bearing hovered near `0` or the
+  signed-angle wrap at `+/-180`, tiny numerical or motion changes could flip
+  left/right every tick.
+- Naval 2.0 and simple broadside Auto/Both now keep the existing resolved side
+  inside a small deadband around those tied bearings, while still switching when
+  one side is clearly favoured.
+- This mirrors the important behaviour of vanilla's stateful
+  `FtdLegacyCommon.state`: broadside side is part of behaviour state, not just a
+  fresh UI preference calculation each rendered frame.
+
 ## Next Research Targets
 
 To improve fidelity, decompile and summarize these next:

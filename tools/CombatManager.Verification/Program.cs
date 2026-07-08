@@ -25,6 +25,7 @@ namespace CombatManager.Verification
                 AirplaneMaintainsForwardSpeed();
                 ScenarioPresetsApplyBothMainframes();
                 BuildDuelFrameDoesNotMutateNavalState();
+                AutoBroadsideSideDoesNotFlickerNearWrap();
                 BlueImportNullDoesNotChangeRed();
                 FullscreenLayoutKeepsPanelsInsideScreen();
                 FullscreenLayoutKeepsGraphPositiveAt1280();
@@ -223,6 +224,43 @@ namespace CombatManager.Verification
 
             if (state.Blue.NavalState != blue || state.Red.NavalState != red)
                 throw new InvalidOperationException("BuildDuelFrame mutated naval state");
+        }
+
+        private static void AutoBroadsideSideDoesNotFlickerNearWrap()
+        {
+            var tiedBehind = new AiPlanInput
+            {
+                Preset = AiSimulationPreset.NavalBroadside,
+                Side = AiSimulationSide.Both,
+                NavalState = AiSimulationNavalState.BroadsideLeft,
+                CraftPosition = Vector3.zero,
+                CraftHeading = Vector3.forward,
+                TargetPosition = new Vector3(0.2f, 0f, -500f),
+                TargetVelocity = Vector3.zero,
+                Radius = 600f,
+                BroadsideOuterRadius = 900f,
+                BroadsideAngle = 75f,
+                CircleMinApproachAngle = 45f,
+                CraftSpeed = 45f
+            };
+
+            if (AiBehaviourPlanner.AdvanceNavalState(tiedBehind) != AiSimulationNavalState.BroadsideLeft)
+                throw new InvalidOperationException("auto broadside did not keep left side near 180 degree wrap");
+
+            tiedBehind.NavalState = AiSimulationNavalState.BroadsideRight;
+            tiedBehind.TargetPosition = new Vector3(-0.2f, 0f, -500f);
+            if (AiBehaviourPlanner.AdvanceNavalState(tiedBehind) != AiSimulationNavalState.BroadsideRight)
+                throw new InvalidOperationException("auto broadside did not keep right side near 180 degree wrap");
+
+            AiPlanInput clearSide = tiedBehind;
+            clearSide.NavalState = AiSimulationNavalState.Closing;
+            clearSide.TargetPosition = new Vector3(500f, 0f, 0f);
+            AiSimulationNavalState clearCandidate = AiBehaviourPlanner.AdvanceNavalState(clearSide);
+            clearSide.NavalState = clearCandidate == AiSimulationNavalState.BroadsideLeft
+                ? AiSimulationNavalState.BroadsideRight
+                : AiSimulationNavalState.BroadsideLeft;
+            if (AiBehaviourPlanner.AdvanceNavalState(clearSide) != clearCandidate)
+                throw new InvalidOperationException("auto broadside did not switch when one side was clearly favoured");
         }
 
         private static void BlueImportNullDoesNotChangeRed()
