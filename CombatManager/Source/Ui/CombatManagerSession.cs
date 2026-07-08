@@ -195,6 +195,12 @@ namespace CombatManager.Ui
 
             GUILayout.Space(8f);
             GUILayout.Label("Craft", CombatManagerTheme.Header);
+            GUILayout.Label("Movement card model", CombatManagerTheme.Mini);
+            GUILayout.BeginHorizontal();
+            MovementModelButton("Ship", AiCraftMovementModel.ShipOrTank);
+            MovementModelButton("Hover", AiCraftMovementModel.HoverSixAxis);
+            MovementModelButton("Plane", AiCraftMovementModel.Airplane);
+            GUILayout.EndHorizontal();
             _state.CraftSpeed = SliderRow("Max speed", _state.CraftSpeed, 1f, 160f, "m/s");
             _state.CraftTurnRate = SliderRow("Turn rate", _state.CraftTurnRate, 5f, 240f, "deg/s");
             _state.CraftAcceleration = SliderRow("Acceleration", _state.CraftAcceleration, 1f, 80f, "m/s2");
@@ -220,6 +226,7 @@ namespace CombatManager.Ui
             AiSimulationFrame frame = _state.BuildFrame();
             GUILayout.Label(frame.Summary, CombatManagerTheme.BodyWrap);
             GUILayout.Label($"Range {frame.GroundRange:0.#}m | Azimuth {frame.Azimuth:0.#} deg", CombatManagerTheme.BodyWrap);
+            GUILayout.Label($"Movement model: {frame.CraftMovementModel}", CombatManagerTheme.BodyWrap);
             GUILayout.Label($"{frame.Kind}: {frame.AiState}{(frame.Approximate ? " (approximated)" : string.Empty)}", frame.Approximate ? CombatManagerTheme.Warning : CombatManagerTheme.BodyWrap);
             GUILayout.Label(_state.ImportStatus, CombatManagerTheme.Warning);
 
@@ -269,7 +276,9 @@ namespace CombatManager.Ui
 
             _state.TargetSpeed = SliderRow("Target speed", _state.TargetSpeed, 0f, 140f, "m/s");
             _state.TargetTurnRate = SliderRow("Turn rate", _state.TargetTurnRate, 0f, 20f, "deg/s");
-            _state.TargetAltitude = SliderRow("Altitude", _state.TargetAltitude, 0f, 800f, "m");
+            float targetAltitude = SliderRow("Altitude", _state.TargetAltitude, 0f, 800f, "m");
+            if (!Mathf.Approximately(targetAltitude, _state.TargetAltitude))
+                _state.SetTargetAltitude(targetAltitude);
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("Reset Target Path", CombatManagerTheme.Button))
                 _state.ResetTargetPath();
@@ -295,11 +304,22 @@ namespace CombatManager.Ui
             }
         }
 
+        private void MovementModelButton(string label, AiCraftMovementModel model)
+        {
+            GUIStyle style = _state.CraftMovementModel == model ? CombatManagerTheme.ActiveButton : CombatManagerTheme.Button;
+            if (GUILayout.Button(label, style))
+            {
+                _state.CraftMovementModel = model;
+                _state.ResetCraft();
+            }
+        }
+
         private void DrawImportDrawer()
         {
             GUILayout.Label("Import", CombatManagerTheme.Header);
             LabelPair("Mainframe", _state.ImportedMainframe);
             LabelPair("Behaviour", _state.ImportedBehaviour);
+            LabelPair("Manoeuvre", _state.ImportedManoeuvre);
 
             string label = _state.ShowImportDetails ? "Hide Import Details" : "Show Import Details";
             if (GUILayout.Button(label, CombatManagerTheme.Button))

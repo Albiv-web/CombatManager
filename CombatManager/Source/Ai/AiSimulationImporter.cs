@@ -3,6 +3,9 @@ using System.Collections.Generic;
 using BrilliantSkies.Ai.Interfaces;
 using BrilliantSkies.Ai.Modules.Behaviour;
 using BrilliantSkies.Ai.Modules.Behaviour.Examples;
+using BrilliantSkies.Ai.Modules.Manoeuvre;
+using BrilliantSkies.Ai.Modules.Manoeuvre.Examples;
+using BrilliantSkies.Ai.Modules.Manoeuvre.Examples.Ftd;
 using UnityEngine;
 
 namespace CombatManager.Ai
@@ -35,8 +38,11 @@ namespace CombatManager.Ai
                 return false;
 
             object behaviour = null;
+            object manoeuvre = null;
             mainframe.Node.Master.Pack.GetSelectedBehaviour(out BrilliantSkies.Ai.Modules.Behaviour.IBehaviour selectedBehaviour);
+            mainframe.Node.Master.Pack.GetSelectedManoeuvre(out IManoeuvre selectedManoeuvre);
             behaviour = selectedBehaviour;
+            manoeuvre = selectedManoeuvre;
             if (behaviour == null)
                 return false;
 
@@ -44,6 +50,8 @@ namespace CombatManager.Ai
             state.ImportedRequests.Clear();
             state.ImportedMainframe = mainframe.Node.Name;
             state.ImportedBehaviour = behaviour.GetType().Name;
+            state.ImportedManoeuvre = manoeuvre?.GetType().Name;
+            ApplyManoeuvre(manoeuvre, state);
 
             if (behaviour is BehaviourCircleAtDistance circle)
             {
@@ -107,6 +115,32 @@ namespace CombatManager.Ai
                     return AiSimulationSide.Right;
                 default:
                     return AiSimulationSide.Both;
+            }
+        }
+
+        private static void ApplyManoeuvre(object manoeuvre, AiSimulationState state)
+        {
+            if (manoeuvre == null)
+                return;
+
+            if (manoeuvre is ManoeuvreSixAxis || manoeuvre is ManoeuvreHover)
+            {
+                state.CraftMovementModel = AiCraftMovementModel.HoverSixAxis;
+                state.ImportedParameters.Add($"movement {manoeuvre.GetType().Name} -> hover/six-axis pursuit");
+            }
+            else if (manoeuvre is ManoeuvreAirplane || manoeuvre is FtdAerialMovement)
+            {
+                state.CraftMovementModel = AiCraftMovementModel.Airplane;
+                state.ImportedParameters.Add($"movement {manoeuvre.GetType().Name} -> airplane pursuit");
+            }
+            else if (manoeuvre is FtdNavalAndLandManoeuvre)
+            {
+                state.CraftMovementModel = AiCraftMovementModel.ShipOrTank;
+                state.ImportedParameters.Add($"movement {manoeuvre.GetType().Name} -> ship/tank pursuit");
+            }
+            else
+            {
+                state.ImportedParameters.Add($"movement {manoeuvre.GetType().Name} not mirrored; keeping {state.CraftMovementModelName()}");
             }
         }
 

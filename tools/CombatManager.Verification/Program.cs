@@ -25,6 +25,9 @@ namespace CombatManager.Verification
                 PointAtPlannerKeepsDesiredRangeAroundMovingTarget();
                 BroadsidePlannerFlipsSidePredictably();
                 CraftPursuitConvergesTowardStationaryDesiredPoint();
+                ShipTurnRateConstrainsMovementPath();
+                BuildFrameDoesNotMutateNavalState();
+                TargetAltitudeAppliesImmediately();
                 Console.WriteLine("CombatManager verification passed.");
                 return 0;
             }
@@ -242,6 +245,69 @@ namespace CombatManager.Verification
                 throw new InvalidOperationException($"craft pursuit did not converge enough: initial {initialError}, final {finalError}");
             if (Math.Abs(frame.GroundRange - state.Radius) > 35f)
                 throw new InvalidOperationException($"craft pursuit overshot desired range: {frame.GroundRange}");
+        }
+
+        private static void ShipTurnRateConstrainsMovementPath()
+        {
+            AiSimulationState slowTurn = CreateTurnRateState(5f);
+            AiSimulationState fastTurn = CreateTurnRateState(180f);
+
+            slowTurn.Step(1f);
+            fastTurn.Step(1f);
+
+            if (fastTurn.CraftPosition.x <= slowTurn.CraftPosition.x + 50f)
+            {
+                throw new InvalidOperationException(
+                    $"turn rate did not materially affect ship path: slow x {slowTurn.CraftPosition.x}, fast x {fastTurn.CraftPosition.x}");
+            }
+        }
+
+        private static AiSimulationState CreateTurnRateState(float turnRate)
+        {
+            var state = new AiSimulationState
+            {
+                Preset = AiSimulationPreset.PointAt,
+                Radius = 400f,
+                CraftSpeed = 50f,
+                CraftAcceleration = 50f,
+                CraftTurnRate = turnRate,
+                CraftMovementModel = AiCraftMovementModel.ShipOrTank
+            };
+            state.SetTargetProfile(AiTargetProfile.Static);
+            state.Reset();
+            state.Radius = 520f;
+            return state;
+        }
+
+        private static void BuildFrameDoesNotMutateNavalState()
+        {
+            var state = new AiSimulationState
+            {
+                Preset = AiSimulationPreset.NavalBroadside,
+                Radius = 200f,
+                BroadsideOuterRadius = 300f
+            };
+            state.SetTargetProfile(AiTargetProfile.Static);
+            state.Reset();
+            state.Step(0.1f);
+            AiSimulationNavalState before = state.NavalState;
+
+            for (int i = 0; i < 10; i++)
+                state.BuildFrame();
+
+            if (state.NavalState != before)
+                throw new InvalidOperationException($"BuildFrame mutated naval state from {before} to {state.NavalState}");
+        }
+
+        private static void TargetAltitudeAppliesImmediately()
+        {
+            var state = new AiSimulationState();
+            state.SetTargetProfile(AiTargetProfile.Plane);
+            state.Reset();
+            state.SetTargetAltitude(525f);
+
+            AssertNear(525f, state.TargetPosition.y, "target altitude position");
+            AssertNear(525f, state.BuildFrame().TargetPosition.y, "target altitude frame");
         }
 
         private static void AssertNear(float expected, float actual, string name)

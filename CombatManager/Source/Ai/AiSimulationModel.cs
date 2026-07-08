@@ -43,6 +43,13 @@ namespace CombatManager.Ai
         BroadsideRight
     }
 
+    internal enum AiCraftMovementModel
+    {
+        ShipOrTank,
+        HoverSixAxis,
+        Airplane
+    }
+
     internal sealed class AiSimulationState
     {
         private const int MaxTrailPoints = 220;
@@ -59,6 +66,7 @@ namespace CombatManager.Ai
         internal AiTargetProfile TargetProfile { get; private set; } = AiTargetProfile.Ship;
         internal AiTargetPathMode TargetPathMode { get; set; } = AiTargetPathMode.Orbit;
         internal AiSimulationNavalState NavalState { get; private set; } = AiSimulationNavalState.Closing;
+        internal AiCraftMovementModel CraftMovementModel { get; set; } = AiCraftMovementModel.ShipOrTank;
 
         internal float Radius { get; set; } = 200f;
         internal float BroadsideOuterRadius { get; set; } = 300f;
@@ -92,6 +100,7 @@ namespace CombatManager.Ai
         internal bool ShowImportDetails { get; set; }
         internal string ImportStatus { get; set; } = "Standalone sandbox. Import is optional.";
         internal string ImportedBehaviour { get; set; }
+        internal string ImportedManoeuvre { get; set; }
         internal string ImportedMainframe { get; set; }
 
         internal List<string> ImportedParameters { get; } = new List<string>();
@@ -143,6 +152,7 @@ namespace CombatManager.Ai
                 return;
 
             AdvanceTarget(delta);
+            AdvanceAiState(BuildTargetInfo());
             AiSimulationFrame frame = BuildFrame();
             AdvanceCraft(frame, delta);
             AiSimulationFrame updatedFrame = BuildFrame();
@@ -174,6 +184,14 @@ namespace CombatManager.Ai
         }
 
         internal string TargetProfileName() => TargetProfileName(TargetProfile);
+
+        internal string CraftMovementModelName() => CraftMovementModelName(CraftMovementModel);
+
+        internal void SetTargetAltitude(float altitude)
+        {
+            TargetAltitude = Mathf.Max(0f, altitude);
+            TargetPosition = new Vector3(TargetPosition.x, TargetAltitude, TargetPosition.z);
+        }
 
         internal AiSimulationFrame BuildFrame()
         {
@@ -270,6 +288,19 @@ namespace CombatManager.Ai
                     return "Plane";
                 default:
                     return "Ship";
+            }
+        }
+
+        private static string CraftMovementModelName(AiCraftMovementModel model)
+        {
+            switch (model)
+            {
+                case AiCraftMovementModel.HoverSixAxis:
+                    return "Hover / Six-axis";
+                case AiCraftMovementModel.Airplane:
+                    return "Airplane";
+                default:
+                    return "Ship / Tank";
             }
         }
 
@@ -382,12 +413,6 @@ namespace CombatManager.Ai
         private AiSimulationFrame BuildNavalBroadsideFrame(SyntheticTargetInfo target)
         {
             float enterBelow = Mathf.Max(10f, Radius);
-            float leaveAbove = Mathf.Max(enterBelow + 20f, BroadsideOuterRadius);
-            if (NavalState == AiSimulationNavalState.Closing && target.Range <= enterBelow)
-                NavalState = AiSimulationNavalState.BroadsideLeft;
-            else if (NavalState != AiSimulationNavalState.Closing && target.Range >= leaveAbove)
-                NavalState = AiSimulationNavalState.Closing;
-
             if (NavalState == AiSimulationNavalState.Closing)
             {
                 return BuildCommonFrame(
@@ -401,8 +426,8 @@ namespace CombatManager.Ai
                     state: "closing");
             }
 
-            NavalState = ChooseNavalSide(target);
-            float desiredAngle = BroadsideAngle * (NavalState == AiSimulationNavalState.BroadsideRight ? -1f : 1f);
+            AiSimulationNavalState resolvedState = ResolveNavalSide(target);
+            float desiredAngle = BroadsideAngle * (resolvedState == AiSimulationNavalState.BroadsideRight ? -1f : 1f);
             Vector3 fromTarget = -target.DirectionFlat;
             Vector3 desiredPoint = TargetPosition + PlanarMath.RotateYaw(fromTarget, desiredAngle) * enterBelow;
             desiredPoint.y = CraftPosition.y;
@@ -413,9 +438,9 @@ namespace CombatManager.Ai
                 desiredFacing,
                 Vector3.zero,
                 "Broadside 2.0",
-                $"{NavalStateLabel()} at {desiredAngle:0.#} deg",
+                $"{NavalStateLabel(resolvedState)} at {desiredAngle:0.#} deg",
                 approximate: true,
-                state: NavalStateLabel(),
+                state: NavalStateLabel(resolvedState),
                 broadsideAngle: desiredAngle);
         }
 
@@ -453,6 +478,7 @@ namespace CombatManager.Ai
                 AiState = state,
                 TargetProfile = TargetProfileName(),
                 TargetSpeed = TargetSpeed,
+                CraftMovementModel = CraftMovementModelName(),
                 Approximate = approximate,
                 HasDesiredPoint = true,
                 HasDesiredFacing = true
@@ -478,7 +504,22 @@ namespace CombatManager.Ai
             return target.Azimuth > 0f ? -1f : 1f;
         }
 
-        private AiSimulationNavalState ChooseNavalSide(SyntheticTargetInfo target)
+        private void AdvanceAiState(SyntheticTargetInfo target)
+        {
+            if (Preset != AiSimulationPreset.NavalBroadside)
+                return;
+
+            float enterBelow = Mathf.Max(10f, Radius);
+            float leaveAbove = Mathf.Max(enterBelow + 20f, BroadsideOuterRadius);
+            if (NavalState == AiSimulationNavalState.Closing && target.Range <= enterBelow)
+                NavalState = ResolveNavalSide(target);
+            else if (NavalState != AiSimulationNavalState.Closing && target.Range >= leaveAbove)
+                NavalState = AiSimulationNavalState.Closing;
+            else if (NavalState != AiSimulationNavalState.Closing)
+                NavalState = ResolveNavalSide(target);
+        }
+
+        private AiSimulationNavalState ResolveNavalSide(SyntheticTargetInfo target)
         {
             if (Side == AiSimulationSide.Left)
                 return AiSimulationNavalState.BroadsideLeft;
@@ -492,9 +533,9 @@ namespace CombatManager.Ai
                 : AiSimulationNavalState.BroadsideLeft;
         }
 
-        private string NavalStateLabel()
+        private static string NavalStateLabel(AiSimulationNavalState state)
         {
-            switch (NavalState)
+            switch (state)
             {
                 case AiSimulationNavalState.BroadsideRight:
                     return "right broadside";
@@ -509,11 +550,18 @@ namespace CombatManager.Ai
         {
             Vector3 toGoal = PlanarMath.Flatten(frame.DesiredPoint - CraftPosition);
             float distance = toGoal.magnitude;
-            Vector3 moveDirection = distance > 0.1f ? toGoal.normalized : Vector3.zero;
-            float desiredSpeed = CraftSpeed * Mathf.Clamp01(distance / 120f);
+            Vector3 desiredMoveDirection = distance > 0.1f ? toGoal.normalized : Vector3.zero;
+            Vector3 desiredHeading = DesiredCraftHeading(frame, desiredMoveDirection);
+            CraftHeading = RotateTowardsFlat(CraftHeading, desiredHeading, CraftTurnRate * delta);
+
+            Vector3 moveDirection = CraftMoveDirection(desiredMoveDirection);
+            float desiredSpeed = CraftSpeed * CraftThrottle(distance, desiredMoveDirection);
             CraftCurrentSpeed = Mathf.MoveTowards(CraftCurrentSpeed, desiredSpeed, CraftAcceleration * delta);
 
-            float travel = Mathf.Min(CraftCurrentSpeed * delta, distance);
+            float travel = CraftCurrentSpeed * delta;
+            if (CraftMovementModel == AiCraftMovementModel.HoverSixAxis)
+                travel = Mathf.Min(travel, distance);
+
             if (distance <= 1f)
             {
                 CraftCurrentSpeed = 0f;
@@ -525,9 +573,41 @@ namespace CombatManager.Ai
                 CraftVelocity = moveDirection * (travel / Mathf.Max(0.001f, delta));
             }
 
-            Vector3 desiredHeading = frame.HasDesiredFacing ? frame.DesiredFacing : moveDirection;
-            CraftHeading = RotateTowardsFlat(CraftHeading, desiredHeading, CraftTurnRate * delta);
             CraftPosition = new Vector3(CraftPosition.x, 0f, CraftPosition.z);
+        }
+
+        private Vector3 DesiredCraftHeading(AiSimulationFrame frame, Vector3 desiredMoveDirection)
+        {
+            if (CraftMovementModel == AiCraftMovementModel.HoverSixAxis && frame.HasDesiredFacing)
+                return frame.DesiredFacing;
+            if (desiredMoveDirection.sqrMagnitude > 0.0001f)
+                return desiredMoveDirection;
+            return frame.HasDesiredFacing ? frame.DesiredFacing : CraftHeading;
+        }
+
+        private Vector3 CraftMoveDirection(Vector3 desiredMoveDirection)
+        {
+            if (CraftMovementModel == AiCraftMovementModel.HoverSixAxis)
+                return desiredMoveDirection;
+            return CraftHeading;
+        }
+
+        private float CraftThrottle(float distance, Vector3 desiredMoveDirection)
+        {
+            if (distance <= 1f || desiredMoveDirection.sqrMagnitude < 0.0001f)
+                return 0f;
+
+            float distanceScale = Mathf.Clamp01(distance / 120f);
+            if (CraftMovementModel == AiCraftMovementModel.HoverSixAxis)
+                return CraftSpeed * distanceScale;
+            if (CraftMovementModel == AiCraftMovementModel.Airplane)
+                return CraftSpeed * Mathf.Lerp(0.55f, 1f, distanceScale);
+
+            float absAngle = Mathf.Abs(PlanarMath.SignedPlanarAngle(CraftHeading, desiredMoveDirection));
+            float turnScale = absAngle <= 50f
+                ? 1f
+                : Mathf.Lerp(1f, 0.2f, Mathf.Clamp01((absAngle - 50f) / 85f));
+            return CraftSpeed * distanceScale * turnScale;
         }
 
         private static Vector3 RotateTowardsFlat(Vector3 current, Vector3 desired, float maxDegrees)
@@ -597,6 +677,7 @@ namespace CombatManager.Ai
         internal string AiState;
         internal string TargetProfile;
         internal float TargetSpeed;
+        internal string CraftMovementModel;
         internal bool Approximate;
         internal bool HasDesiredPoint;
         internal bool HasDesiredFacing;
