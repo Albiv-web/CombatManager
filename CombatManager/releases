@@ -1,0 +1,3 @@
+0.1.0
+- Initial CombatManager mod shell.
+- Added passive AI intent visualizer toggled with Ctrl+Shift+C in build mode.

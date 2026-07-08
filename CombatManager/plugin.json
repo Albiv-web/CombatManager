@@ -1,0 +1,8 @@
+{
+  "name": "CombatManager",
+  "version": "0.1.0",
+  "filename": "CombatManager.dll",
+  "gameversion": "4.3.3",
+  "depends": [],
+  "conflicts": []
+}

@@ -1,0 +1,9 @@
+{
+  "Authors": "Knut",
+  "Version": "00000000-0000-0000-0000-000000000000",
+  "ComponentId": {
+    "Guid": "bfb0f407-1e77-481f-a995-c9d22a54a507",
+    "Name": "CombatManager"
+  },
+  "Description": "A From The Depths combat-management mod."
+}
