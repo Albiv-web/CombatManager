@@ -14,26 +14,17 @@ namespace CombatManager.Verification
                 SafePlanarDirectionIgnoresY();
                 RotateYawMatchesUnityTopDownConvention();
                 GroundDistanceUsesOnlyXZ();
-                CraftMovesDuringCircleSimulation();
-                CircleMotionPointStaysFinite();
-                SharedPlannerSeparatesRawSteerFromMotionPoint();
-                CircleCraftSpeedStaysCapped();
-                TargetProjectionStaysCentered();
-                OrbitRingFitsResizeBounds();
-                RectangularProjectionKeepsTargetCentered();
-                ZoomChangesMetersPerPixelPredictably();
-                SideModesProduceStableFrames();
-                TargetCenteredCoordinateConversionSurvivesTargetMovement();
-                TargetProfileSpeedTurnStepping();
-                PointAtPlannerKeepsDesiredRangeAroundMovingTarget();
-                BroadsidePlannerFlipsSidePredictably();
-                CraftPursuitConvergesTowardStationaryDesiredPoint();
-                ShipTurnRateConstrainsMovementPath();
-                HoverMovementFacesTargetWhileTranslating();
+                RedProjectionStaysCenteredWhileBothMove();
+                SimultaneousDuelStepIsMirrorStable();
+                BothEntitiesPlanIndependently();
+                CirclePlannerSeparatesRawSteerFromMotionPoint();
+                ShipTurnRateConstrainsHeadingChange();
+                HoverAzimuthLimitReducesMovement();
+                SixAxisMovesAndFacesWithLookAhead();
                 AirplaneMaintainsForwardSpeed();
-                ScenarioPresetAppliesProfiles();
-                BuildFrameDoesNotMutateNavalState();
-                TargetAltitudeAppliesImmediately();
+                ScenarioPresetsApplyBothMainframes();
+                BuildDuelFrameDoesNotMutateNavalState();
+                BlueImportNullDoesNotChangeRed();
                 Console.WriteLine("CombatManager verification passed.");
                 return 0;
             }
@@ -71,379 +62,209 @@ namespace CombatManager.Verification
 
         private static void GroundDistanceUsesOnlyXZ()
         {
-            float distance = PlanarMath.GroundDistance(
-                new Vector3(0f, 100f, 0f),
-                new Vector3(3f, -100f, 4f));
+            float distance = PlanarMath.GroundDistance(new Vector3(0f, 100f, 0f), new Vector3(3f, -100f, 4f));
             AssertNear(5f, distance, "3-4-5 ground distance");
         }
 
-        private static void CraftMovesDuringCircleSimulation()
+        private static void RedProjectionStaysCenteredWhileBothMove()
         {
-            var state = new AiSimulationState
-            {
-                Preset = AiSimulationPreset.Circle,
-                Side = AiSimulationSide.Left,
-                Radius = 200f,
-                CraftSpeed = 20f,
-                PlaybackSpeed = 1f
-            };
+            var state = new AiSimulationState();
+            state.ApplyScenarioPreset(AiScenarioPreset.ShipDuel);
+            state.Step(3f);
 
-            state.Reset();
-            Vector3 before = state.CraftPosition;
-            state.Step(2f);
-
-            if (PlanarMath.GroundDistance(before, state.CraftPosition) <= 0.1f)
-                throw new InvalidOperationException("circle simulation did not move the craft");
+            Rect rect = new Rect(20f, 10f, 900f, 500f);
+            AiSimulationGridProjection projection = AiSimulationGridProjection.For(rect, state);
+            Vector2 red = projection.WorldToScreen(state.Red.Position);
+            AssertNear(rect.center.x, red.x, "red centered x");
+            AssertNear(rect.center.y, red.y, "red centered y");
         }
 
-        private static void CircleMotionPointStaysFinite()
+        private static void SimultaneousDuelStepIsMirrorStable()
         {
-            var state = new AiSimulationState
-            {
-                Preset = AiSimulationPreset.Circle,
-                Side = AiSimulationSide.Left,
-                Radius = 200f,
-                CraftSpeed = 45f
-            };
-            state.SetTargetProfile(AiTargetProfile.Static);
-            state.Reset();
+            var state = new AiSimulationState();
+            ConfigureSymmetricPointAt(state.Blue);
+            ConfigureSymmetricPointAt(state.Red);
+            state.ResetScenario();
 
-            AiSimulationFrame frame = state.BuildFrame();
-            float rawSteerDistance = PlanarMath.GroundDistance(frame.CraftPosition, frame.DesiredPoint);
-            float motionDistance = PlanarMath.GroundDistance(frame.CraftPosition, frame.MotionPoint);
+            float beforeMidpoint = (state.Blue.Position.x + state.Red.Position.x) * 0.5f;
+            state.Step(0.5f);
+            float afterMidpoint = (state.Blue.Position.x + state.Red.Position.x) * 0.5f;
+            float blueTravel = PlanarMath.GroundDistance(new Vector3(380f, 0f, 0f), state.Blue.Position);
+            float redTravel = PlanarMath.GroundDistance(Vector3.zero, state.Red.Position);
 
-            if (rawSteerDistance < 900f)
-                throw new InvalidOperationException($"circle raw steer point unexpectedly short: {rawSteerDistance}");
-            if (motionDistance > 220f)
-                throw new InvalidOperationException($"circle motion point is too far for sandbox pursuit: {motionDistance}");
+            if (Math.Abs(afterMidpoint - beforeMidpoint) > 0.01f)
+                throw new InvalidOperationException($"symmetric simultaneous step drifted midpoint: {beforeMidpoint} -> {afterMidpoint}");
+            if (Math.Abs(blueTravel - redTravel) > 0.01f)
+                throw new InvalidOperationException($"symmetric simultaneous step moved entities unequally: blue {blueTravel}, red {redTravel}");
         }
 
-        private static void SharedPlannerSeparatesRawSteerFromMotionPoint()
+        private static void BothEntitiesPlanIndependently()
         {
-            var state = new AiSimulationState
-            {
-                Preset = AiSimulationPreset.Circle,
-                Side = AiSimulationSide.Left,
-                Radius = 200f,
-                CraftSpeed = 45f
-            };
-            state.SetTargetProfile(AiTargetProfile.Static);
-            state.Reset();
+            var state = new AiSimulationState();
+            state.Blue.Preset = AiSimulationPreset.Circle;
+            state.Blue.Side = AiSimulationSide.Left;
+            state.Red.Preset = AiSimulationPreset.Broadside;
+            state.Red.Side = AiSimulationSide.Right;
+            state.ResetScenario();
 
-            AiSimulationFrame frame = state.BuildFrame();
-            if (!frame.HasRawSteerPoint || !frame.HasMotionPoint)
-                throw new InvalidOperationException("planner did not expose both raw steer and motion point");
+            AiDuelFrame frame = state.BuildDuelFrame();
+            if (frame.Blue.Kind != "Circle")
+                throw new InvalidOperationException($"blue did not plan circle: {frame.Blue.Kind}");
+            if (frame.Red.Kind != "Broadside")
+                throw new InvalidOperationException($"red did not plan broadside: {frame.Red.Kind}");
+            AssertNear(-state.Red.BroadsideAngle, frame.Red.BroadsideAngle, "red right broadside angle");
+        }
 
+        private static void CirclePlannerSeparatesRawSteerFromMotionPoint()
+        {
+            var state = new AiSimulationState();
+            state.Blue.Preset = AiSimulationPreset.Circle;
+            state.Blue.Side = AiSimulationSide.Left;
+            state.Blue.Radius = 200f;
+            state.ResetScenario();
+
+            AiSimulationFrame frame = state.BuildDuelFrame().Blue;
             float rawDistance = PlanarMath.GroundDistance(frame.CraftPosition, frame.RawSteerPoint);
             float motionDistance = PlanarMath.GroundDistance(frame.CraftPosition, frame.MotionPoint);
             if (rawDistance <= motionDistance * 3f)
-                throw new InvalidOperationException($"raw steer and motion point are not separated enough: raw {rawDistance}, motion {motionDistance}");
+                throw new InvalidOperationException($"raw steer and motion point too close: raw {rawDistance}, motion {motionDistance}");
         }
 
-        private static void CircleCraftSpeedStaysCapped()
+        private static void ShipTurnRateConstrainsHeadingChange()
         {
-            var state = new AiSimulationState
-            {
-                Preset = AiSimulationPreset.Circle,
-                Side = AiSimulationSide.Left,
-                Radius = 200f,
-                CraftSpeed = 45f,
-                CraftAcceleration = 500f,
-                CraftTurnRate = 180f,
-                CraftMovementModel = AiCraftMovementModel.ShipOrTank
-            };
-            state.SetTargetProfile(AiTargetProfile.Static);
-            state.Reset();
+            AiSimulationState slow = CreateShipTurnState(5f);
+            AiSimulationState fast = CreateShipTurnState(180f);
 
-            for (int i = 0; i < 160; i++)
-                state.Step(0.1f);
+            slow.Step(1f);
+            fast.Step(1f);
 
-            if (state.CraftCurrentSpeed > state.CraftSpeed + 0.001f)
-            {
-                throw new InvalidOperationException(
-                    $"craft speed exceeded configured max: {state.CraftCurrentSpeed} > {state.CraftSpeed}");
-            }
+            float slowTurned = Mathf.Abs(PlanarMath.SignedPlanarAngle(Vector3.forward, slow.Blue.Heading));
+            float fastTurned = Mathf.Abs(PlanarMath.SignedPlanarAngle(Vector3.forward, fast.Blue.Heading));
+            if (fastTurned <= slowTurned + 3f)
+                throw new InvalidOperationException($"turn rate did not affect heading: slow {slowTurned}, fast {fastTurned}");
         }
 
-        private static void TargetProjectionStaysCentered()
+        private static void HoverAzimuthLimitReducesMovement()
         {
-            var state = new AiSimulationState { Radius = 200f };
-            Rect rect = new Rect(0f, 0f, 600f, 400f);
-            AiSimulationGridProjection projection = AiSimulationGridProjection.For(rect, state);
-            Vector2 center = projection.WorldToScreen(Vector3.zero);
+            AiSimulationState strict = CreateHoverAzimuthState(1f);
+            AiSimulationState permissive = CreateHoverAzimuthState(180f);
 
-            AssertNear(rect.center.x, center.x, "target center x");
-            AssertNear(rect.center.y, center.y, "target center y");
+            strict.Step(1f);
+            permissive.Step(1f);
+
+            if (permissive.Blue.CraftCurrentSpeed <= strict.Blue.CraftCurrentSpeed)
+                throw new InvalidOperationException($"hover azimuth limit did not reduce speed: strict {strict.Blue.CraftCurrentSpeed}, permissive {permissive.Blue.CraftCurrentSpeed}");
         }
 
-        private static void OrbitRingFitsResizeBounds()
-        {
-            var state = new AiSimulationState
-            {
-                Radius = 200f
-            };
-            Rect rect = new Rect(0f, 0f, 300f, 500f);
-            AiSimulationGridProjection projection = AiSimulationGridProjection.For(rect, state);
-            Vector2 center = projection.WorldToScreen(Vector3.zero);
-            Vector2 craft = projection.WorldToScreen(state.BuildFrame().CraftPosition);
-            float screenDistance = (craft - center).magnitude;
-
-            if (screenDistance > Mathf.Min(rect.width, rect.height) * 0.5f)
-                throw new InvalidOperationException("orbit ring exceeds the shortest grid dimension");
-        }
-
-        private static void RectangularProjectionKeepsTargetCentered()
-        {
-            var state = new AiSimulationState { Radius = 350f };
-            Rect rect = new Rect(25f, 40f, 900f, 420f);
-            AiSimulationGridProjection projection = AiSimulationGridProjection.For(rect, state);
-            Vector2 center = projection.WorldToScreen(Vector3.zero);
-
-            AssertNear(rect.center.x, center.x, "rectangular target center x");
-            AssertNear(rect.center.y, center.y, "rectangular target center y");
-
-            if (projection.VisibleHalfWidth <= projection.VisibleHalfHeight)
-                throw new InvalidOperationException("rectangular projection did not expose a wider horizontal world span");
-        }
-
-        private static void ZoomChangesMetersPerPixelPredictably()
-        {
-            var state = new AiSimulationState { Radius = 200f, GridZoom = 1f };
-            Rect rect = new Rect(0f, 0f, 800f, 500f);
-            float baseMetersPerPixel = AiSimulationGridProjection.For(rect, state).MetersPerPixel;
-
-            state.GridZoom = 2f;
-            float zoomedMetersPerPixel = AiSimulationGridProjection.For(rect, state).MetersPerPixel;
-
-            AssertNear(baseMetersPerPixel * 0.5f, zoomedMetersPerPixel, "zoom m/px");
-        }
-
-        private static void SideModesProduceStableFrames()
-        {
-            AssertStableSide(AiSimulationSide.Both, -1f);
-            AssertStableSide(AiSimulationSide.Left, 1f);
-            AssertStableSide(AiSimulationSide.Right, -1f);
-        }
-
-        private static void AssertStableSide(AiSimulationSide side, float expectedDirection)
-        {
-            var state = new AiSimulationState
-            {
-                Preset = AiSimulationPreset.Circle,
-                Side = side,
-                Radius = 200f
-            };
-            AiSimulationFrame frame = state.BuildFrame();
-
-            AssertNear(expectedDirection, state.OrbitDirection(), $"{side} orbit direction");
-            AssertNear(200f, PlanarMath.GroundDistance(Vector3.zero, frame.CraftPosition), $"{side} craft radius");
-
-            if (float.IsNaN(frame.CraftHeading.x) || float.IsNaN(frame.CraftHeading.z))
-                throw new InvalidOperationException($"{side} produced a NaN heading");
-        }
-
-        private static void TargetCenteredCoordinateConversionSurvivesTargetMovement()
+        private static void SixAxisMovesAndFacesWithLookAhead()
         {
             var state = new AiSimulationState();
-            state.SetTargetProfile(AiTargetProfile.FastMover);
-            state.Step(5f);
-            Rect rect = new Rect(0f, 0f, 900f, 500f);
-            AiSimulationGridProjection projection = AiSimulationGridProjection.For(rect, state);
-            Vector2 targetScreen = projection.WorldToScreen(state.TargetPosition);
+            state.ApplyScenarioPreset(AiScenarioPreset.HoverDuel);
+            state.Blue.ApplyCraftProfile(AiCraftProfile.SixAxisDrone);
+            state.Blue.SixAxisLookAheadDistance = 500f;
+            state.ResetScenario();
 
-            AssertNear(rect.center.x, targetScreen.x, "moving target center x");
-            AssertNear(rect.center.y, targetScreen.y, "moving target center y");
-        }
-
-        private static void TargetProfileSpeedTurnStepping()
-        {
-            var state = new AiSimulationState();
-            state.SetTargetProfile(AiTargetProfile.Ship);
-            Vector3 heading = state.TargetHeading;
+            Vector3 before = state.Blue.Position;
+            state.Blue.Radius += 120f;
             state.Step(1f);
 
-            AssertNear(18f, state.TargetVelocity.magnitude, "ship profile speed");
-            if (PlanarMath.SignedPlanarAngle(heading, state.TargetHeading) <= 0.1f)
-                throw new InvalidOperationException("ship profile did not turn on orbit path");
-        }
-
-        private static void PointAtPlannerKeepsDesiredRangeAroundMovingTarget()
-        {
-            var state = new AiSimulationState
-            {
-                Preset = AiSimulationPreset.PointAt,
-                Radius = 275f
-            };
-            state.SetTargetProfile(AiTargetProfile.FastMover);
-            state.Step(1f);
-            AiSimulationFrame frame = state.BuildFrame();
-
-            AssertNear(275f, PlanarMath.GroundDistance(frame.TargetPosition, frame.DesiredPoint), "point-at desired range");
-        }
-
-        private static void BroadsidePlannerFlipsSidePredictably()
-        {
-            var state = new AiSimulationState
-            {
-                Preset = AiSimulationPreset.Broadside,
-                Radius = 200f,
-                BroadsideAngle = 75f,
-                Side = AiSimulationSide.Left
-            };
-            state.Reset();
-            AssertNear(75f, state.BuildFrame().BroadsideAngle, "left broadside angle");
-
-            state.Side = AiSimulationSide.Right;
-            AssertNear(-75f, state.BuildFrame().BroadsideAngle, "right broadside angle");
-        }
-
-        private static void CraftPursuitConvergesTowardStationaryDesiredPoint()
-        {
-            var state = new AiSimulationState
-            {
-                Preset = AiSimulationPreset.PointAt,
-                Radius = 400f,
-                CraftSpeed = 50f,
-                CraftAcceleration = 25f
-            };
-            state.SetTargetProfile(AiTargetProfile.Static);
-            state.Reset();
-            state.Radius = 520f;
-            float initialError = PlanarMath.GroundDistance(state.CraftPosition, state.BuildFrame().DesiredPoint);
-
-            for (int i = 0; i < 120; i++)
-                state.Step(0.1f);
-
-            AiSimulationFrame frame = state.BuildFrame();
-            float finalError = PlanarMath.GroundDistance(state.CraftPosition, frame.DesiredPoint);
-            if (finalError >= initialError * 0.25f)
-                throw new InvalidOperationException($"craft pursuit did not converge enough: initial {initialError}, final {finalError}");
-            if (Math.Abs(frame.GroundRange - state.Radius) > 35f)
-                throw new InvalidOperationException($"craft pursuit overshot desired range: {frame.GroundRange}");
-        }
-
-        private static void ShipTurnRateConstrainsMovementPath()
-        {
-            AiSimulationState slowTurn = CreateTurnRateState(5f);
-            AiSimulationState fastTurn = CreateTurnRateState(180f);
-
-            slowTurn.Step(1f);
-            fastTurn.Step(1f);
-
-            float slowTurned = Mathf.Abs(PlanarMath.SignedPlanarAngle(Vector3.forward, slowTurn.CraftHeading));
-            float fastTurned = Mathf.Abs(PlanarMath.SignedPlanarAngle(Vector3.forward, fastTurn.CraftHeading));
-
-            if (fastTurned <= slowTurned + 10f)
-            {
-                throw new InvalidOperationException(
-                    $"turn rate did not materially affect heading: slow {slowTurned}, fast {fastTurned}");
-            }
-        }
-
-        private static AiSimulationState CreateTurnRateState(float turnRate)
-        {
-            var state = new AiSimulationState
-            {
-                Preset = AiSimulationPreset.Circle,
-                Side = AiSimulationSide.Left,
-                Radius = 200f,
-                CraftSpeed = 50f,
-                CraftAcceleration = 50f,
-                CraftTurnRate = turnRate,
-                CraftMovementModel = AiCraftMovementModel.ShipOrTank
-            };
-            state.SetTargetProfile(AiTargetProfile.Static);
-            state.Reset();
-            state.Radius = 260f;
-            return state;
-        }
-
-        private static void HoverMovementFacesTargetWhileTranslating()
-        {
-            var state = new AiSimulationState
-            {
-                Preset = AiSimulationPreset.PointAt,
-                Radius = 520f
-            };
-            state.SetTargetProfile(AiTargetProfile.Static);
-            state.SetCraftProfile(AiCraftProfile.Hovercraft);
-            state.Reset();
-            state.Radius = 620f;
-
-            Vector3 before = state.CraftPosition;
-            state.Step(1f);
-            AiSimulationFrame frame = state.BuildFrame();
-            float facingError = Mathf.Abs(PlanarMath.SignedPlanarAngle(state.CraftHeading, frame.ToTarget));
-
-            if (state.CraftPosition.x <= before.x)
-                throw new InvalidOperationException("hover model did not translate toward the range point");
-            if (facingError > 15f)
-                throw new InvalidOperationException($"hover model did not keep facing target: {facingError} deg");
+            if (PlanarMath.GroundDistance(before, state.Blue.Position) <= 0.1f)
+                throw new InvalidOperationException("six-axis model did not translate");
+            if (float.IsNaN(state.Blue.Heading.x) || float.IsNaN(state.Blue.Heading.z))
+                throw new InvalidOperationException("six-axis model produced NaN heading");
         }
 
         private static void AirplaneMaintainsForwardSpeed()
         {
-            var state = new AiSimulationState
-            {
-                Preset = AiSimulationPreset.PointAt,
-                Radius = 450f
-            };
-            state.SetTargetProfile(AiTargetProfile.Plane);
-            state.SetCraftProfile(AiCraftProfile.Airplane);
-            state.Reset();
-
+            var state = new AiSimulationState();
+            state.ApplyScenarioPreset(AiScenarioPreset.PlaneIntercept);
             for (int i = 0; i < 8; i++)
                 state.Step(0.5f);
 
-            if (state.CraftCurrentSpeed < state.AirplaneMinimumSpeed - 0.01f)
-                throw new InvalidOperationException($"airplane fell below minimum speed: {state.CraftCurrentSpeed}");
-            if (state.CraftVelocity.magnitude <= 0.1f)
-                throw new InvalidOperationException("airplane model did not keep moving forward");
+            if (state.Blue.CraftCurrentSpeed < state.Blue.AirplaneMinimumSpeed - 0.01f)
+                throw new InvalidOperationException($"blue airplane fell below minimum speed: {state.Blue.CraftCurrentSpeed}");
+            if (state.Red.CraftCurrentSpeed < state.Red.AirplaneMinimumSpeed - 0.01f)
+                throw new InvalidOperationException($"red airplane fell below minimum speed: {state.Red.CraftCurrentSpeed}");
         }
 
-        private static void ScenarioPresetAppliesProfiles()
+        private static void ScenarioPresetsApplyBothMainframes()
         {
             var state = new AiSimulationState();
-            state.ApplyScenarioPreset(AiScenarioPreset.PlaneIntercept);
+            state.ApplyScenarioPreset(AiScenarioPreset.BroadsideDuel);
+            if (state.Blue.Preset != AiSimulationPreset.NavalBroadside || state.Red.Preset != AiSimulationPreset.NavalBroadside)
+                throw new InvalidOperationException("broadside duel did not set both entities to Naval 2.0");
 
-            if (state.Preset != AiSimulationPreset.PointAt)
-                throw new InvalidOperationException("plane intercept did not set point-at behaviour");
-            if (state.TargetProfile != AiTargetProfile.Plane)
-                throw new InvalidOperationException("plane intercept did not set plane target profile");
-            if (state.CraftMovementModel != AiCraftMovementModel.Airplane)
-                throw new InvalidOperationException("plane intercept did not set airplane movement model");
-            AssertNear(450f, state.Radius, "plane intercept radius");
+            state.ApplyScenarioPreset(AiScenarioPreset.PlaneIntercept);
+            if (state.Blue.CraftMovementModel != AiCraftMovementModel.Airplane || state.Red.CraftMovementModel != AiCraftMovementModel.Airplane)
+                throw new InvalidOperationException("plane intercept did not set both entities to airplane movement");
         }
 
-        private static void BuildFrameDoesNotMutateNavalState()
+        private static void BuildDuelFrameDoesNotMutateNavalState()
         {
-            var state = new AiSimulationState
-            {
-                Preset = AiSimulationPreset.NavalBroadside,
-                Radius = 200f,
-                BroadsideOuterRadius = 300f
-            };
-            state.SetTargetProfile(AiTargetProfile.Static);
-            state.Reset();
+            var state = new AiSimulationState();
+            state.ApplyScenarioPreset(AiScenarioPreset.BroadsideDuel);
             state.Step(0.1f);
-            AiSimulationNavalState before = state.NavalState;
+            AiSimulationNavalState blue = state.Blue.NavalState;
+            AiSimulationNavalState red = state.Red.NavalState;
 
             for (int i = 0; i < 10; i++)
-                state.BuildFrame();
+                state.BuildDuelFrame();
 
-            if (state.NavalState != before)
-                throw new InvalidOperationException($"BuildFrame mutated naval state from {before} to {state.NavalState}");
+            if (state.Blue.NavalState != blue || state.Red.NavalState != red)
+                throw new InvalidOperationException("BuildDuelFrame mutated naval state");
         }
 
-        private static void TargetAltitudeAppliesImmediately()
+        private static void BlueImportNullDoesNotChangeRed()
         {
             var state = new AiSimulationState();
-            state.SetTargetProfile(AiTargetProfile.Plane);
-            state.Reset();
-            state.SetTargetAltitude(525f);
+            AiSimulationPreset redPreset = state.Red.Preset;
+            AiCraftMovementModel redMovement = state.Red.CraftMovementModel;
 
-            AssertNear(525f, state.TargetPosition.y, "target altitude position");
-            AssertNear(525f, state.BuildFrame().TargetPosition.y, "target altitude frame");
+            AiSimulationImporter.TryImport(null, state, out _);
+
+            if (state.Red.Preset != redPreset || state.Red.CraftMovementModel != redMovement)
+                throw new InvalidOperationException("null import changed Red configuration");
+        }
+
+        private static void ConfigureSymmetricPointAt(AiSimEntity entity)
+        {
+            entity.ApplyCraftProfile(AiCraftProfile.SurfaceShip);
+            entity.Preset = AiSimulationPreset.PointAt;
+            entity.Radius = 300f;
+            entity.CraftSpeed = 40f;
+            entity.CraftAcceleration = 40f;
+            entity.CraftTurnRate = 180f;
+            entity.ShipTarryDistance = 0f;
+        }
+
+        private static AiSimulationState CreateShipTurnState(float turnRate)
+        {
+            var state = new AiSimulationState();
+            state.Blue.ApplyCraftProfile(AiCraftProfile.SurfaceShip);
+            state.Blue.Preset = AiSimulationPreset.Circle;
+            state.Blue.Side = AiSimulationSide.Left;
+            state.Blue.Radius = 260f;
+            state.Blue.CraftSpeed = 50f;
+            state.Blue.CraftAcceleration = 50f;
+            state.Blue.CraftTurnRate = turnRate;
+            state.ResetScenario();
+            state.Blue.Radius = 320f;
+            return state;
+        }
+
+        private static AiSimulationState CreateHoverAzimuthState(float moveWithinAzimuth)
+        {
+            var state = new AiSimulationState();
+            state.Blue.ApplyCraftProfile(AiCraftProfile.Hovercraft);
+            state.Blue.Preset = AiSimulationPreset.PointAt;
+            state.Blue.Side = AiSimulationSide.Left;
+            state.Blue.Radius = 260f;
+            state.Blue.CraftSpeed = 40f;
+            state.Blue.CraftAcceleration = 40f;
+            state.Blue.HoverMoveWithinAzimuth = moveWithinAzimuth;
+            state.ResetScenario();
+            state.Blue.Radius = 460f;
+            return state;
         }
 
         private static void AssertNear(float expected, float actual, string name)

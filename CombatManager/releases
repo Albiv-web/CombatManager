@@ -21,3 +21,9 @@
 - Added a shared behaviour planner layer with raw steer point, finite motion point, desired facing, range, side/state, and approximation notes.
 - Split sandbox pursuit into ship/tank, hover/six-axis, and airplane movement-card models.
 - Added scenario presets, raw steer/motion-point grid toggles, and selected-mainframe one-shot import.
+
+0.1.5
+- Reworked the sandbox into a symmetric Blue-vs-Red AI duel simulator.
+- Added mainframe-like behaviour and manoeuvre settings for both simulated entities.
+- Added shared ship/tank, hover, six-axis, and airplane manoeuvre simulation used by both sides.
+- Kept import one-shot and Blue-only; Red remains manually configured inside the sandbox.

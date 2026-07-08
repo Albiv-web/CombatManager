@@ -468,6 +468,30 @@ V1.4 moves the sandbox closer to the real FTD split:
 - The grid names raw steer bearing separately from the finite motion point so
   long vanilla steer points do not get confused with the sandbox chase point.
 
+V1.5 turns that into a two-sided duel sandbox:
+
+- The simulation now has Blue and Red `AiSimEntity` objects. Each has
+  mainframe-like behaviour settings, manoeuvre model, craft profile, AI state,
+  position, heading, velocity, trails, and warnings.
+- Both entities build behaviour plans from the same pre-step snapshot, then both
+  movement models advance. This avoids order bias where Red would react to
+  Blue's already-updated position.
+- The grid remains Red-centered so Red is always the target reticle, but Red
+  itself also has AI intent and manoeuvre simulation.
+- `AiManoeuvreSimulator` is shared by both sides and mirrors the known shape of
+  FTD manoeuvres:
+  - Ship/tank approximates tarry distance, reverse, yaw-to-steer, and
+    azimuth-based thrust slowdown.
+  - Hover approximates yaw lock, move-within-azimuth, forward reduction, and
+    strafe suppression above azimuth.
+  - Six-axis approximates independent forward/back, strafe, hover, yaw, and
+    look-ahead facing.
+  - Airplane approximates idle thrust, minimum forward motion, banked turning,
+    and altitude/pitch metadata.
+- We are confident about the architecture: behaviour selects intent and
+  manoeuvre turns intent into requests. We are not claiming exact vanilla
+  physics/PID/pathfinding yet.
+
 ## Next Research Targets
 
 To improve fidelity, decompile and summarize these next:
@@ -488,7 +512,9 @@ To improve fidelity, decompile and summarize these next:
 2. Replace current approximated movement models with research-backed details
    from `AiVehicleManoeuvreCommonVariables`, `Adjustment`, and
    `FtdAiWrapper`.
-3. Add scenario copy/paste serialization once the scenario model has settled.
-4. Add per-feature approximation badges: no pathfinding, no terrain, no PID,
+3. Add Red-side or target-side import only after live target craft discovery is
+   understood and can remain strictly read-only.
+4. Add scenario copy/paste serialization once the scenario model has settled.
+5. Add per-feature approximation badges: no pathfinding, no terrain, no PID,
    no propulsion physics, no target-priority logic.
-5. Later, add a 3D/altitude view after the 2D target-centered lab is reliable.
+6. Later, add a 3D/altitude view after the 2D target-centered lab is reliable.

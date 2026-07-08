@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using BrilliantSkies.Ai.Interfaces;
 using UnityEngine;
@@ -46,7 +45,8 @@ namespace CombatManager.Ai
     internal enum AiCraftMovementModel
     {
         ShipOrTank,
-        HoverSixAxis,
+        Hover,
+        SixAxis,
         Airplane
     }
 
@@ -54,349 +54,97 @@ namespace CombatManager.Ai
     {
         SurfaceShip,
         Hovercraft,
+        SixAxisDrone,
         Airplane,
         FastAircraft
     }
 
     internal enum AiScenarioPreset
     {
-        ShipCircle,
-        HoverPointAt,
-        NavalBroadside,
+        ShipDuel,
+        BroadsideDuel,
+        HoverDuel,
         PlaneIntercept
     }
 
-    internal sealed class AiSimulationState
+    internal enum AiEntityRole
     {
-        private const int MaxTrailPoints = 220;
-        private const float NavalPredictionFactor = 5f;
+        Blue,
+        Red
+    }
 
-        internal AiSimulationState()
+    internal sealed class AiSimEntity
+    {
+        private const int MaxTrailPoints = 240;
+
+        internal AiSimEntity(AiEntityRole role, string name)
         {
-            ApplyTargetProfile(AiTargetProfile.Ship);
+            Role = role;
+            Name = name;
             ApplyCraftProfile(AiCraftProfile.SurfaceShip);
-            ResetScenario();
         }
 
+        internal AiEntityRole Role { get; }
+        internal string Name { get; set; }
         internal AiSimulationPreset Preset { get; set; } = AiSimulationPreset.Circle;
         internal AiSimulationSide Side { get; set; } = AiSimulationSide.Both;
-        internal AiScenarioPreset ScenarioPreset { get; private set; } = AiScenarioPreset.ShipCircle;
-        internal AiCraftProfile CraftProfile { get; private set; } = AiCraftProfile.SurfaceShip;
-        internal AiTargetProfile TargetProfile { get; private set; } = AiTargetProfile.Ship;
-        internal AiTargetPathMode TargetPathMode { get; set; } = AiTargetPathMode.Orbit;
-        internal AiSimulationNavalState NavalState { get; private set; } = AiSimulationNavalState.Closing;
+        internal AiSimulationNavalState NavalState { get; set; } = AiSimulationNavalState.Closing;
         internal AiCraftMovementModel CraftMovementModel { get; set; } = AiCraftMovementModel.ShipOrTank;
+        internal AiCraftProfile CraftProfile { get; private set; } = AiCraftProfile.SurfaceShip;
 
         internal float Radius { get; set; } = 200f;
         internal float BroadsideOuterRadius { get; set; } = 300f;
+        internal float BroadsideAngle { get; set; } = 75f;
+        internal float CircleMinApproachAngle { get; set; } = 45f;
         internal float CraftSpeed { get; set; } = 45f;
         internal float CraftAcceleration { get; set; } = 18f;
         internal float CraftTurnRate { get; set; } = 90f;
-        internal float CraftCurrentSpeed { get; private set; }
-        internal float ShipTarryDistance { get; set; } = 20f;
+        internal float CraftCurrentSpeed { get; set; }
+        internal float Altitude { get; set; }
+
+        internal float ShipTarryDistance { get; set; } = 50f;
         internal bool ShipReverseAllowed { get; set; } = true;
+        internal float HoverYawLockDistance { get; set; } = 150f;
+        internal float HoverMoveWithinAzimuth { get; set; } = 30f;
         internal float HoverStrafeAuthority { get; set; } = 0.75f;
-        internal float HoverMoveWithinAzimuth { get; set; } = 55f;
+        internal float SixAxisLookAheadDistance { get; set; } = 50f;
         internal float AirplaneMinimumSpeed { get; set; } = 22f;
         internal float AirplaneMinimumTurnRadius { get; set; } = 80f;
-        internal float PlaybackSpeed { get; set; } = 1f;
-        internal float BroadsideAngle { get; set; } = 75f;
-        internal float CircleMinApproachAngle { get; set; } = 45f;
-        internal float TargetSpeed { get; set; }
-        internal float TargetTurnRate { get; set; }
-        internal float TargetAltitude { get; set; }
-        internal float GridZoom { get; set; } = 1f;
-        internal float OrbitAngleDegrees { get; private set; }
-        internal float SimulationTime { get; private set; }
+        internal float AirplaneIdleThrust { get; set; } = 100f;
+        internal float AirplaneIdleDistance { get; set; } = 300f;
+        internal float AirplaneBankingTurnAbove { get; set; } = 20f;
+        internal float AirplaneBankingTurnRoll { get; set; } = 45f;
+        internal float AirplanePitchForAltitude { get; set; } = 15f;
 
-        internal Vector3 TargetPosition { get; private set; }
-        internal Vector3 TargetHeading { get; private set; } = Vector3.forward;
-        internal Vector3 TargetVelocity { get; private set; }
-        internal Vector3 CraftPosition { get; private set; }
-        internal Vector3 CraftHeading { get; private set; } = Vector3.back;
-        internal Vector3 CraftVelocity { get; private set; }
+        internal Vector3 Position { get; set; }
+        internal Vector3 Heading { get; set; } = Vector3.forward;
+        internal Vector3 Velocity { get; set; }
 
-        internal bool Playing { get; set; } = true;
-        internal bool ShowInspector { get; set; } = true;
-        internal bool ShowTrail { get; set; } = true;
-        internal bool ShowDesiredTrail { get; set; } = true;
-        internal bool ShowRawSteer { get; set; } = true;
-        internal bool ShowMotionPoint { get; set; } = true;
-        internal bool ShowTargetPath { get; set; } = true;
-        internal bool ShowLegend { get; set; } = true;
-        internal bool ShowImportDetails { get; set; }
-        internal string ImportStatus { get; set; } = "Standalone sandbox. Import is optional.";
-        internal string ImportedBehaviour { get; set; }
-        internal string ImportedManoeuvre { get; set; }
-        internal string ImportedMainframe { get; set; }
-        internal int SelectedImportIndex { get; set; } = -1;
-
-        internal List<AiImportCandidate> ImportCandidates { get; } = new List<AiImportCandidate>();
-        internal List<string> ImportedParameters { get; } = new List<string>();
-        internal List<AiControlRequestSnapshot> ImportedRequests { get; } = new List<AiControlRequestSnapshot>();
         internal List<Vector3> Trail { get; } = new List<Vector3>();
-        internal List<Vector3> DesiredTrail { get; } = new List<Vector3>();
-        internal List<Vector3> TargetTrail { get; } = new List<Vector3>();
+        internal List<Vector3> IntentTrail { get; } = new List<Vector3>();
 
-        internal void Reset()
-        {
-            ResetScenario();
-        }
-
-        internal void ResetScenario()
-        {
-            ResetTargetPath();
-            ResetCraft();
-            DesiredTrail.Clear();
-            AddDesiredTrailPoint(FrameMotionPoint(BuildFrame()));
-        }
-
-        internal void ResetTargetPath()
-        {
-            SimulationTime = 0f;
-            TargetPosition = new Vector3(0f, TargetAltitude, 0f);
-            TargetHeading = Vector3.forward;
-            TargetVelocity = TargetHeading * TargetSpeed;
-            TargetTrail.Clear();
-            TargetTrail.Add(TargetPosition);
-        }
-
-        internal void ResetCraft()
-        {
-            CraftPosition = TargetPosition + Vector3.right * Mathf.Max(10f, Radius);
-            CraftPosition = new Vector3(CraftPosition.x, 0f, CraftPosition.z);
-            CraftHeading = InitialCraftHeading();
-            CraftVelocity = Vector3.zero;
-            CraftCurrentSpeed = 0f;
-            NavalState = AiSimulationNavalState.Closing;
-            UpdateOrbitAngle();
-            Trail.Clear();
-            Trail.Add(CraftPosition);
-        }
-
-        internal void Step(float deltaSeconds)
-        {
-            float delta = Mathf.Max(0f, deltaSeconds) * Mathf.Max(0f, PlaybackSpeed);
-            if (delta <= 0f)
-                return;
-
-            AdvanceTarget(delta);
-            AdvanceAiState();
-            AiSimulationFrame frame = BuildFrame();
-            AdvanceCraft(frame, delta);
-            AiSimulationFrame updatedFrame = BuildFrame();
-
-            AddTrailPoint(CraftPosition);
-            AddTargetTrailPoint(TargetPosition);
-            AddDesiredTrailPoint(FrameMotionPoint(updatedFrame));
-            UpdateOrbitAngle();
-        }
-
-        internal void SetPreset(AiSimulationPreset preset)
-        {
-            if (Preset == preset)
-                return;
-
-            Preset = preset;
-            ResetCraft();
-            DesiredTrail.Clear();
-            AddDesiredTrailPoint(FrameMotionPoint(BuildFrame()));
-        }
-
-        internal void SetTargetProfile(AiTargetProfile profile)
-        {
-            if (TargetProfile == profile)
-                return;
-
-            ApplyTargetProfile(profile);
-            ResetScenario();
-        }
-
-        internal void SetCraftProfile(AiCraftProfile profile)
-        {
-            ApplyCraftProfile(profile);
-            ResetCraft();
-            DesiredTrail.Clear();
-            AddDesiredTrailPoint(FrameMotionPoint(BuildFrame()));
-        }
-
-        internal void ApplyScenarioPreset(AiScenarioPreset preset)
-        {
-            ScenarioPreset = preset;
-            switch (preset)
-            {
-                case AiScenarioPreset.HoverPointAt:
-                    Preset = AiSimulationPreset.PointAt;
-                    Side = AiSimulationSide.Both;
-                    Radius = 260f;
-                    ApplyTargetProfile(AiTargetProfile.FastMover);
-                    TargetPathMode = AiTargetPathMode.SCurve;
-                    ApplyCraftProfile(AiCraftProfile.Hovercraft);
-                    break;
-                case AiScenarioPreset.NavalBroadside:
-                    Preset = AiSimulationPreset.NavalBroadside;
-                    Side = AiSimulationSide.Both;
-                    Radius = 350f;
-                    BroadsideOuterRadius = 520f;
-                    BroadsideAngle = 75f;
-                    ApplyTargetProfile(AiTargetProfile.Ship);
-                    TargetPathMode = AiTargetPathMode.Orbit;
-                    ApplyCraftProfile(AiCraftProfile.SurfaceShip);
-                    break;
-                case AiScenarioPreset.PlaneIntercept:
-                    Preset = AiSimulationPreset.PointAt;
-                    Side = AiSimulationSide.Both;
-                    Radius = 450f;
-                    ApplyTargetProfile(AiTargetProfile.Plane);
-                    TargetPathMode = AiTargetPathMode.SCurve;
-                    ApplyCraftProfile(AiCraftProfile.Airplane);
-                    break;
-                case AiScenarioPreset.ShipCircle:
-                default:
-                    Preset = AiSimulationPreset.Circle;
-                    Side = AiSimulationSide.Both;
-                    Radius = 200f;
-                    BroadsideOuterRadius = 300f;
-                    ApplyTargetProfile(AiTargetProfile.Ship);
-                    TargetPathMode = AiTargetPathMode.Orbit;
-                    ApplyCraftProfile(AiCraftProfile.SurfaceShip);
-                    break;
-            }
-
-            ResetScenario();
-        }
-
-        internal string TargetProfileName() => TargetProfileName(TargetProfile);
-
-        internal string CraftMovementModelName() => CraftMovementModelName(CraftMovementModel);
-
-        internal string CraftProfileName() => CraftProfileName(CraftProfile);
-
-        internal string ScenarioPresetName() => ScenarioPresetName(ScenarioPreset);
-
-        internal void SetTargetAltitude(float altitude)
-        {
-            TargetAltitude = Mathf.Max(0f, altitude);
-            TargetPosition = new Vector3(TargetPosition.x, TargetAltitude, TargetPosition.z);
-        }
-
-        internal AiSimulationFrame BuildFrame()
-        {
-            AiBehaviourPlan plan = AiBehaviourPlanner.Plan(BuildPlannerInput());
-            return new AiSimulationFrame
-            {
-                Preset = Preset,
-                TargetPosition = TargetPosition,
-                TargetVelocity = TargetVelocity,
-                TargetHeading = TargetHeading,
-                CraftPosition = CraftPosition,
-                CraftVelocity = CraftVelocity,
-                CraftHeading = CraftHeading,
-                DesiredPoint = plan.RawSteerPoint,
-                RawSteerPoint = plan.RawSteerPoint,
-                MotionPoint = plan.MotionPoint,
-                DesiredFacing = plan.DesiredFacing,
-                DesiredTravel = plan.DesiredTravel,
-                ToTarget = plan.ToTarget,
-                Radius = Radius,
-                BroadsideAngle = plan.BroadsideAngle,
-                Range = plan.Range,
-                GroundRange = plan.GroundRange,
-                Azimuth = plan.Azimuth,
-                Kind = plan.Kind,
-                Summary = plan.Summary,
-                AiState = plan.AiState,
-                ApproximationNote = plan.ApproximationNote,
-                TargetProfile = TargetProfileName(),
-                TargetSpeed = TargetSpeed,
-                CraftMovementModel = CraftMovementModelName(),
-                CraftProfile = CraftProfileName(),
-                Approximate = plan.Approximate,
-                HasDesiredPoint = plan.HasRawSteerPoint,
-                HasRawSteerPoint = plan.HasRawSteerPoint,
-                HasMotionPoint = plan.HasMotionPoint,
-                HasDesiredFacing = plan.HasDesiredFacing,
-                ReversePreferred = plan.ReversePreferred
-            };
-        }
-
-        internal List<Vector3> BuildTargetFuturePath(int steps, float stepSeconds)
-        {
-            var path = new List<Vector3>();
-            Vector3 position = TargetPosition;
-            Vector3 heading = TargetHeading;
-            float time = SimulationTime;
-            float speed = Mathf.Max(0f, TargetSpeed);
-
-            for (int i = 0; i < steps; i++)
-            {
-                float yaw = TargetYawDelta(stepSeconds, time);
-                heading = PlanarMath.RotateYaw(heading, yaw);
-                position += heading * speed * stepSeconds;
-                position.y = TargetAltitude;
-                time += stepSeconds;
-                path.Add(position);
-            }
-
-            return path;
-        }
-
-        internal float OrbitDirection()
-        {
-            return Side == AiSimulationSide.Left ? 1f : -1f;
-        }
-
-        private void ApplyTargetProfile(AiTargetProfile profile)
-        {
-            TargetProfile = profile;
-            switch (profile)
-            {
-                case AiTargetProfile.Static:
-                    TargetSpeed = 0f;
-                    TargetTurnRate = 0f;
-                    TargetAltitude = 0f;
-                    TargetPathMode = AiTargetPathMode.Straight;
-                    break;
-                case AiTargetProfile.SlowMover:
-                    TargetSpeed = 8f;
-                    TargetTurnRate = 2f;
-                    TargetAltitude = 0f;
-                    TargetPathMode = AiTargetPathMode.SCurve;
-                    break;
-                case AiTargetProfile.FastMover:
-                    TargetSpeed = 45f;
-                    TargetTurnRate = 8f;
-                    TargetAltitude = 0f;
-                    TargetPathMode = AiTargetPathMode.SCurve;
-                    break;
-                case AiTargetProfile.Plane:
-                    TargetSpeed = 90f;
-                    TargetTurnRate = 3f;
-                    TargetAltitude = 300f;
-                    TargetPathMode = AiTargetPathMode.Orbit;
-                    break;
-                case AiTargetProfile.Ship:
-                default:
-                    TargetSpeed = 18f;
-                    TargetTurnRate = 1.2f;
-                    TargetAltitude = 0f;
-                    TargetPathMode = AiTargetPathMode.Orbit;
-                    break;
-            }
-        }
-
-        private void ApplyCraftProfile(AiCraftProfile profile)
+        internal void ApplyCraftProfile(AiCraftProfile profile)
         {
             CraftProfile = profile;
             switch (profile)
             {
                 case AiCraftProfile.Hovercraft:
-                    CraftMovementModel = AiCraftMovementModel.HoverSixAxis;
+                    CraftMovementModel = AiCraftMovementModel.Hover;
                     CraftSpeed = 35f;
                     CraftAcceleration = 28f;
                     CraftTurnRate = 135f;
-                    HoverStrafeAuthority = 0.85f;
-                    HoverMoveWithinAzimuth = 70f;
+                    HoverYawLockDistance = 150f;
+                    HoverMoveWithinAzimuth = 30f;
+                    HoverStrafeAuthority = 0.3f;
+                    Altitude = 40f;
+                    break;
+                case AiCraftProfile.SixAxisDrone:
+                    CraftMovementModel = AiCraftMovementModel.SixAxis;
+                    CraftSpeed = 38f;
+                    CraftAcceleration = 32f;
+                    CraftTurnRate = 160f;
+                    SixAxisLookAheadDistance = 50f;
+                    Altitude = 80f;
                     break;
                 case AiCraftProfile.Airplane:
                     CraftMovementModel = AiCraftMovementModel.Airplane;
@@ -405,6 +153,12 @@ namespace CombatManager.Ai
                     CraftTurnRate = 95f;
                     AirplaneMinimumSpeed = 32f;
                     AirplaneMinimumTurnRadius = 120f;
+                    AirplaneIdleThrust = 100f;
+                    AirplaneIdleDistance = 300f;
+                    AirplaneBankingTurnAbove = 20f;
+                    AirplaneBankingTurnRoll = 45f;
+                    AirplanePitchForAltitude = 15f;
+                    Altitude = 300f;
                     break;
                 case AiCraftProfile.FastAircraft:
                     CraftMovementModel = AiCraftMovementModel.Airplane;
@@ -413,6 +167,12 @@ namespace CombatManager.Ai
                     CraftTurnRate = 130f;
                     AirplaneMinimumSpeed = 70f;
                     AirplaneMinimumTurnRadius = 180f;
+                    AirplaneIdleThrust = 100f;
+                    AirplaneIdleDistance = 450f;
+                    AirplaneBankingTurnAbove = 16f;
+                    AirplaneBankingTurnRoll = 55f;
+                    AirplanePitchForAltitude = 18f;
+                    Altitude = 450f;
                     break;
                 case AiCraftProfile.SurfaceShip:
                 default:
@@ -420,517 +180,33 @@ namespace CombatManager.Ai
                     CraftSpeed = 45f;
                     CraftAcceleration = 18f;
                     CraftTurnRate = 90f;
-                    ShipTarryDistance = 20f;
+                    ShipTarryDistance = 50f;
                     ShipReverseAllowed = true;
+                    Altitude = 0f;
                     break;
             }
         }
 
-        private static string TargetProfileName(AiTargetProfile profile)
+        internal void ResetMotion(Vector3 position, Vector3 heading)
         {
-            switch (profile)
-            {
-                case AiTargetProfile.Static:
-                    return "Static";
-                case AiTargetProfile.SlowMover:
-                    return "Slow mover";
-                case AiTargetProfile.FastMover:
-                    return "Fast mover";
-                case AiTargetProfile.Plane:
-                    return "Plane";
-                default:
-                    return "Ship";
-            }
+            Position = new Vector3(position.x, Altitude, position.z);
+            Heading = PlanarMath.SafePlanarDirection(Vector3.zero, heading, Vector3.forward);
+            Velocity = Vector3.zero;
+            CraftCurrentSpeed = 0f;
+            NavalState = AiSimulationNavalState.Closing;
+            Trail.Clear();
+            IntentTrail.Clear();
+            AddTrailPoint(Position);
         }
 
-        private static string CraftMovementModelName(AiCraftMovementModel model)
-        {
-            switch (model)
-            {
-                case AiCraftMovementModel.HoverSixAxis:
-                    return "Hover / Six-axis";
-                case AiCraftMovementModel.Airplane:
-                    return "Airplane";
-                default:
-                    return "Ship / Tank";
-            }
-        }
-
-        private static string CraftProfileName(AiCraftProfile profile)
-        {
-            switch (profile)
-            {
-                case AiCraftProfile.Hovercraft:
-                    return "Hovercraft";
-                case AiCraftProfile.Airplane:
-                    return "Airplane";
-                case AiCraftProfile.FastAircraft:
-                    return "Fast aircraft";
-                default:
-                    return "Surface ship";
-            }
-        }
-
-        private static string ScenarioPresetName(AiScenarioPreset preset)
-        {
-            switch (preset)
-            {
-                case AiScenarioPreset.HoverPointAt:
-                    return "Hover point-at";
-                case AiScenarioPreset.NavalBroadside:
-                    return "Naval broadside";
-                case AiScenarioPreset.PlaneIntercept:
-                    return "Plane intercept";
-                default:
-                    return "Ship circle";
-            }
-        }
-
-        private Vector3 InitialCraftHeading()
-        {
-            if (Preset == AiSimulationPreset.Circle)
-                return new Vector3(0f, 0f, 1f) * OrbitDirection();
-            return PlanarMath.SafePlanarDirection(CraftPosition, TargetPosition, Vector3.back);
-        }
-
-        private void AdvanceTarget(float delta)
-        {
-            float yaw = TargetYawDelta(delta, SimulationTime);
-            TargetHeading = PlanarMath.RotateYaw(TargetHeading, yaw);
-            TargetVelocity = TargetHeading * Mathf.Max(0f, TargetSpeed);
-            TargetPosition += TargetVelocity * delta;
-            TargetPosition = new Vector3(TargetPosition.x, TargetAltitude, TargetPosition.z);
-            SimulationTime += delta;
-        }
-
-        private float TargetYawDelta(float delta, float time)
-        {
-            switch (TargetPathMode)
-            {
-                case AiTargetPathMode.Orbit:
-                    return TargetTurnRate * delta;
-                case AiTargetPathMode.SCurve:
-                    return Mathf.Sin(time * 0.45f) * TargetTurnRate * delta;
-                default:
-                    return 0f;
-            }
-        }
-
-        private SyntheticTargetInfo BuildTargetInfo()
-        {
-            Vector3 direction = TargetPosition - CraftPosition;
-            Vector3 flatDirection = PlanarMath.Flatten(direction);
-            float range = direction.magnitude;
-            float groundDistance = flatDirection.magnitude;
-            Vector3 directionFlat = PlanarMath.SafePlanarDirection(CraftPosition, TargetPosition, CraftHeading);
-            float azimuth = PlanarMath.SignedPlanarAngle(CraftHeading, directionFlat);
-            return new SyntheticTargetInfo
-            {
-                Valid = true,
-                Position = TargetPosition,
-                Velocity = TargetVelocity,
-                Direction = direction,
-                DirectionFlat = directionFlat,
-                Range = range,
-                GroundDistance = groundDistance,
-                Azimuth = azimuth
-            };
-        }
-
-        private AiPlanInput BuildPlannerInput()
-        {
-            return new AiPlanInput
-            {
-                Preset = Preset,
-                Side = Side,
-                NavalState = NavalState,
-                CraftPosition = CraftPosition,
-                CraftHeading = CraftHeading,
-                CraftVelocity = CraftVelocity,
-                TargetPosition = TargetPosition,
-                TargetVelocity = TargetVelocity,
-                TargetProfileName = TargetProfileName(),
-                TargetSpeed = TargetSpeed,
-                Radius = Radius,
-                BroadsideOuterRadius = BroadsideOuterRadius,
-                BroadsideAngle = BroadsideAngle,
-                CircleMinApproachAngle = CircleMinApproachAngle,
-                CraftSpeed = CraftSpeed
-            };
-        }
-
-        private AiSimulationFrame BuildCircleFrame(SyntheticTargetInfo target)
-        {
-            float approachAngle = GetCircleApproachAngle(target);
-            Vector3 desiredTravel = PlanarMath.RotateYaw(target.DirectionFlat, approachAngle);
-            Vector3 desiredPoint = CraftPosition + desiredTravel * 1000f;
-            Vector3 motionPoint = BuildCircleMotionPoint(target, desiredTravel);
-            return BuildCommonFrame(
-                target,
-                desiredPoint,
-                desiredTravel,
-                desiredTravel,
-                "Circle",
-                $"Circle {Radius:0.#}m vs {TargetProfileName()} {TargetSpeed:0.#}m/s",
-                approximate: false,
-                state: $"approach {approachAngle:0.#} deg",
-                broadsideAngle: 0f,
-                motionPoint: motionPoint);
-        }
-
-        private AiSimulationFrame BuildPointAtFrame(SyntheticTargetInfo target)
-        {
-            float distance = Mathf.Max(10f, Radius);
-            Vector3 desiredPoint = TargetPosition - target.DirectionFlat * distance;
-            desiredPoint.y = CraftPosition.y;
-            return BuildCommonFrame(
-                target,
-                desiredPoint,
-                target.DirectionFlat,
-                Vector3.zero,
-                "Point at",
-                $"Point at target from {distance:0.#}m",
-                approximate: false,
-                state: "hold range");
-        }
-
-        private AiSimulationFrame BuildBroadsideFrame(SyntheticTargetInfo target)
-        {
-            float signedAngle = BroadsideAngle * BroadsideSideSign(target);
-            Vector3 broadsideForward = PlanarMath.RotateYaw(target.DirectionFlat, -signedAngle);
-            Vector3 point = CraftPosition + broadsideForward * 100f;
-            Vector3 fromTarget = PlanarMath.Flatten(point - TargetPosition);
-            if (fromTarget.sqrMagnitude < 0.0001f)
-                fromTarget = -target.DirectionFlat;
-
-            Vector3 desiredPoint = TargetPosition + fromTarget.normalized * Mathf.Max(10f, Radius);
-            desiredPoint.y = CraftPosition.y;
-            return BuildCommonFrame(
-                target,
-                desiredPoint,
-                broadsideForward,
-                Vector3.zero,
-                "Broadside",
-                $"Broadside {signedAngle:0.#} deg at {Radius:0.#}m",
-                approximate: false,
-                state: signedAngle >= 0f ? "left broadside" : "right broadside",
-                broadsideAngle: signedAngle);
-        }
-
-        private AiSimulationFrame BuildNavalBroadsideFrame(SyntheticTargetInfo target)
-        {
-            float enterBelow = Mathf.Max(10f, Radius);
-            if (NavalState == AiSimulationNavalState.Closing)
-            {
-                return BuildCommonFrame(
-                    target,
-                    TargetPosition,
-                    target.DirectionFlat,
-                    target.DirectionFlat,
-                    "Broadside 2.0",
-                    $"Closing until {enterBelow:0.#}m",
-                    approximate: true,
-                    state: "closing");
-            }
-
-            AiSimulationNavalState resolvedState = ResolveNavalSide(target);
-            float desiredAngle = BroadsideAngle * (resolvedState == AiSimulationNavalState.BroadsideRight ? -1f : 1f);
-            Vector3 fromTarget = -target.DirectionFlat;
-            Vector3 desiredPoint = TargetPosition + PlanarMath.RotateYaw(fromTarget, desiredAngle) * enterBelow;
-            desiredPoint.y = CraftPosition.y;
-            Vector3 desiredFacing = PlanarMath.SafePlanarDirection(desiredPoint, TargetPosition, CraftHeading);
-            return BuildCommonFrame(
-                target,
-                desiredPoint,
-                desiredFacing,
-                Vector3.zero,
-                "Broadside 2.0",
-                $"{NavalStateLabel(resolvedState)} at {desiredAngle:0.#} deg",
-                approximate: true,
-                state: NavalStateLabel(resolvedState),
-                broadsideAngle: desiredAngle);
-        }
-
-        private AiSimulationFrame BuildCommonFrame(
-            SyntheticTargetInfo target,
-            Vector3 desiredPoint,
-            Vector3 desiredFacing,
-            Vector3 desiredTravel,
-            string kind,
-            string summary,
-            bool approximate,
-            string state,
-            float broadsideAngle = 0f)
-        {
-            return BuildCommonFrame(
-                target,
-                desiredPoint,
-                desiredFacing,
-                desiredTravel,
-                kind,
-                summary,
-                approximate,
-                state,
-                broadsideAngle,
-                desiredPoint);
-        }
-
-        private AiSimulationFrame BuildCommonFrame(
-            SyntheticTargetInfo target,
-            Vector3 desiredPoint,
-            Vector3 desiredFacing,
-            Vector3 desiredTravel,
-            string kind,
-            string summary,
-            bool approximate,
-            string state,
-            float broadsideAngle,
-            Vector3 motionPoint)
-        {
-            return new AiSimulationFrame
-            {
-                Preset = Preset,
-                TargetPosition = TargetPosition,
-                TargetVelocity = TargetVelocity,
-                TargetHeading = TargetHeading,
-                CraftPosition = CraftPosition,
-                CraftVelocity = CraftVelocity,
-                CraftHeading = CraftHeading,
-                DesiredPoint = desiredPoint,
-                RawSteerPoint = desiredPoint,
-                MotionPoint = motionPoint,
-                DesiredFacing = PlanarMath.SafePlanarDirection(Vector3.zero, desiredFacing, CraftHeading),
-                DesiredTravel = PlanarMath.Flatten(desiredTravel),
-                ToTarget = target.DirectionFlat,
-                Radius = Radius,
-                BroadsideAngle = broadsideAngle,
-                Range = target.Range,
-                GroundRange = target.GroundDistance,
-                Azimuth = target.Azimuth,
-                Kind = kind,
-                Summary = summary,
-                AiState = state,
-                TargetProfile = TargetProfileName(),
-                TargetSpeed = TargetSpeed,
-                CraftMovementModel = CraftMovementModelName(),
-                Approximate = approximate,
-                HasDesiredPoint = true,
-                HasRawSteerPoint = true,
-                HasMotionPoint = true,
-                HasDesiredFacing = true
-            };
-        }
-
-        private Vector3 BuildCircleMotionPoint(SyntheticTargetInfo target, Vector3 desiredTravel)
-        {
-            Vector3 fromTarget = PlanarMath.SafePlanarDirection(TargetPosition, CraftPosition, -target.DirectionFlat);
-            Vector3 motionDirection = PlanarMath.SafePlanarDirection(Vector3.zero, desiredTravel, CraftHeading);
-            float radius = Mathf.Max(10f, Radius);
-            float lookAhead = Mathf.Clamp(Mathf.Max(90f, CraftSpeed * 3f), 90f, Mathf.Max(120f, radius * 0.8f));
-            Vector3 point = TargetPosition + fromTarget * radius + motionDirection * lookAhead;
-            point.y = CraftPosition.y;
-            return point;
-        }
-
-        private float GetCircleApproachAngle(SyntheticTargetInfo target)
-        {
-            float range = 90f - CircleMinApproachAngle;
-            float rangeCorrection = range * Mathf.Min(Mathf.Max((Radius - target.GroundDistance) / 200f, -1f), 1f);
-            float result = 90f + rangeCorrection;
-            if (Side == AiSimulationSide.Right || (Side == AiSimulationSide.Both && target.Azimuth > 0f))
-                result = -result;
-            return result;
-        }
-
-        private float BroadsideSideSign(SyntheticTargetInfo target)
-        {
-            if (Side == AiSimulationSide.Left)
-                return 1f;
-            if (Side == AiSimulationSide.Right)
-                return -1f;
-            return target.Azimuth > 0f ? -1f : 1f;
-        }
-
-        private void AdvanceAiState()
-        {
-            NavalState = AiBehaviourPlanner.AdvanceNavalState(BuildPlannerInput());
-        }
-
-        private AiSimulationNavalState ResolveNavalSide(SyntheticTargetInfo target)
-        {
-            if (Side == AiSimulationSide.Left)
-                return AiSimulationNavalState.BroadsideLeft;
-            if (Side == AiSimulationSide.Right)
-                return AiSimulationNavalState.BroadsideRight;
-
-            Vector3 predicted = target.Position + target.Velocity * NavalPredictionFactor;
-            Vector3 vector = PlanarMath.SafePlanarDirection(CraftPosition, predicted, target.DirectionFlat);
-            return PlanarMath.SignedPlanarAngle(vector, CraftHeading) < 0f
-                ? AiSimulationNavalState.BroadsideRight
-                : AiSimulationNavalState.BroadsideLeft;
-        }
-
-        private static string NavalStateLabel(AiSimulationNavalState state)
-        {
-            switch (state)
-            {
-                case AiSimulationNavalState.BroadsideRight:
-                    return "right broadside";
-                case AiSimulationNavalState.BroadsideLeft:
-                    return "left broadside";
-                default:
-                    return "closing";
-            }
-        }
-
-        private void AdvanceCraft(AiSimulationFrame frame, float delta)
-        {
-            Vector3 goal = FrameMotionPoint(frame);
-            Vector3 toGoal = PlanarMath.Flatten(goal - CraftPosition);
-            float distance = toGoal.magnitude;
-            Vector3 desiredMoveDirection = distance > 0.1f ? toGoal.normalized : Vector3.zero;
-
-            switch (CraftMovementModel)
-            {
-                case AiCraftMovementModel.HoverSixAxis:
-                    AdvanceHoverCraft(frame, desiredMoveDirection, distance, delta);
-                    break;
-                case AiCraftMovementModel.Airplane:
-                    AdvanceAirplane(frame, desiredMoveDirection, distance, delta);
-                    break;
-                default:
-                    AdvanceShipOrTank(frame, desiredMoveDirection, distance, delta);
-                    break;
-            }
-
-            CraftPosition = new Vector3(CraftPosition.x, 0f, CraftPosition.z);
-        }
-
-        private void AdvanceShipOrTank(AiSimulationFrame frame, Vector3 desiredMoveDirection, float distance, float delta)
-        {
-            if (distance <= 1f || desiredMoveDirection.sqrMagnitude < 0.0001f)
-            {
-                CraftCurrentSpeed = 0f;
-                CraftVelocity = Vector3.zero;
-                return;
-            }
-
-            bool reversing = ShipReverseAllowed && frame.ReversePreferred;
-            Vector3 desiredHeading = reversing && frame.HasDesiredFacing ? frame.DesiredFacing : desiredMoveDirection;
-            CraftHeading = RotateTowardsFlat(CraftHeading, desiredHeading, CraftTurnRate * delta);
-
-            Vector3 moveDirection = reversing ? -CraftHeading : CraftHeading;
-            float desiredSpeed = CraftSpeed * ShipThrottle01(distance, desiredMoveDirection, reversing);
-            CraftCurrentSpeed = Mathf.MoveTowards(CraftCurrentSpeed, desiredSpeed, CraftAcceleration * delta);
-
-            float travel = CraftCurrentSpeed * delta;
-            if (distance < Mathf.Max(4f, ShipTarryDistance))
-                travel = Mathf.Min(travel, distance);
-
-            CraftPosition += moveDirection * travel;
-            CraftVelocity = moveDirection * (travel / Mathf.Max(0.001f, delta));
-        }
-
-        private void AdvanceHoverCraft(AiSimulationFrame frame, Vector3 desiredMoveDirection, float distance, float delta)
-        {
-            if (distance <= 1f || desiredMoveDirection.sqrMagnitude < 0.0001f)
-            {
-                CraftCurrentSpeed = 0f;
-                CraftVelocity = Vector3.zero;
-                if (frame.HasDesiredFacing)
-                    CraftHeading = RotateTowardsFlat(CraftHeading, frame.DesiredFacing, CraftTurnRate * delta);
-                return;
-            }
-
-            Vector3 desiredFacing = frame.HasDesiredFacing ? frame.DesiredFacing : desiredMoveDirection;
-            CraftHeading = RotateTowardsFlat(CraftHeading, desiredFacing, CraftTurnRate * delta);
-
-            float facingError = Mathf.Abs(PlanarMath.SignedPlanarAngle(CraftHeading, desiredMoveDirection));
-            float strafeScale = facingError <= HoverMoveWithinAzimuth
-                ? 1f
-                : Mathf.Lerp(1f, Mathf.Clamp01(HoverStrafeAuthority), Mathf.Clamp01((facingError - HoverMoveWithinAzimuth) / 120f));
-            float desiredSpeed = CraftSpeed * Mathf.Clamp01(distance / 120f) * strafeScale;
-            CraftCurrentSpeed = Mathf.MoveTowards(CraftCurrentSpeed, desiredSpeed, CraftAcceleration * delta);
-
-            float travel = Mathf.Min(CraftCurrentSpeed * delta, distance);
-            CraftPosition += desiredMoveDirection * travel;
-            CraftVelocity = desiredMoveDirection * (travel / Mathf.Max(0.001f, delta));
-        }
-
-        private void AdvanceAirplane(AiSimulationFrame frame, Vector3 desiredMoveDirection, float distance, float delta)
-        {
-            Vector3 desiredHeading = desiredMoveDirection.sqrMagnitude > 0.0001f
-                ? desiredMoveDirection
-                : (frame.HasDesiredFacing ? frame.DesiredFacing : CraftHeading);
-
-            float speedForTurn = Mathf.Max(AirplaneMinimumSpeed, CraftCurrentSpeed);
-            float radiusLimitedTurnRate = speedForTurn / Mathf.Max(20f, AirplaneMinimumTurnRadius) * Mathf.Rad2Deg;
-            float turnLimit = Mathf.Min(CraftTurnRate, Mathf.Max(8f, radiusLimitedTurnRate));
-            CraftHeading = RotateTowardsFlat(CraftHeading, desiredHeading, turnLimit * delta);
-
-            float distanceScale = Mathf.Clamp01(distance / 200f);
-            float desiredSpeed = Mathf.Max(AirplaneMinimumSpeed, CraftSpeed * Mathf.Lerp(0.65f, 1f, distanceScale));
-            CraftCurrentSpeed = Mathf.MoveTowards(CraftCurrentSpeed, desiredSpeed, CraftAcceleration * delta);
-
-            float travel = CraftCurrentSpeed * delta;
-            CraftPosition += CraftHeading * travel;
-            CraftVelocity = CraftHeading * (travel / Mathf.Max(0.001f, delta));
-        }
-
-        private float ShipThrottle01(float distance, Vector3 desiredMoveDirection, bool reversing)
-        {
-            float distanceScale = Mathf.Clamp01(distance / 120f);
-            if (distance < ShipTarryDistance && Preset != AiSimulationPreset.Circle)
-                distanceScale *= Mathf.Clamp01(distance / Mathf.Max(1f, ShipTarryDistance));
-
-            float facing = reversing
-                ? Mathf.Abs(PlanarMath.SignedPlanarAngle(-CraftHeading, desiredMoveDirection))
-                : Mathf.Abs(PlanarMath.SignedPlanarAngle(CraftHeading, desiredMoveDirection));
-            float turnScale = facing <= 50f
-                ? 1f
-                : Mathf.Lerp(1f, 0.18f, Mathf.Clamp01((facing - 50f) / 85f));
-
-            if (reversing)
-                turnScale *= 0.65f;
-            return distanceScale * turnScale;
-        }
-
-        private static Vector3 FrameMotionPoint(AiSimulationFrame frame)
-        {
-            return frame.HasMotionPoint ? frame.MotionPoint : frame.DesiredPoint;
-        }
-
-        private static Vector3 RotateTowardsFlat(Vector3 current, Vector3 desired, float maxDegrees)
-        {
-            current = PlanarMath.SafePlanarDirection(Vector3.zero, current, Vector3.forward);
-            desired = PlanarMath.SafePlanarDirection(Vector3.zero, desired, current);
-            float angle = PlanarMath.SignedPlanarAngle(current, desired);
-            float step = Mathf.Clamp(angle, -Mathf.Abs(maxDegrees), Mathf.Abs(maxDegrees));
-            return PlanarMath.RotateYaw(current, step);
-        }
-
-        private void UpdateOrbitAngle()
-        {
-            Vector3 relative = PlanarMath.Flatten(CraftPosition - TargetPosition);
-            if (relative.sqrMagnitude < 0.001f)
-                return;
-
-            OrbitAngleDegrees = Mathf.Atan2(relative.z, relative.x) * Mathf.Rad2Deg;
-        }
-
-        private void AddTrailPoint(Vector3 point)
+        internal void AddTrailPoint(Vector3 point)
         {
             AddPoint(Trail, point, 2f);
         }
 
-        private void AddTargetTrailPoint(Vector3 point)
+        internal void AddIntentPoint(Vector3 point)
         {
-            AddPoint(TargetTrail, point, 2f);
-        }
-
-        private void AddDesiredTrailPoint(Vector3 point)
-        {
-            AddPoint(DesiredTrail, point, 3f);
+            AddPoint(IntentTrail, point, 3f);
         }
 
         private static void AddPoint(List<Vector3> points, Vector3 point, float minimumDistance)
@@ -944,8 +220,469 @@ namespace CombatManager.Ai
         }
     }
 
+    internal sealed class AiSimulationState
+    {
+        internal AiSimulationState()
+        {
+            Blue = new AiSimEntity(AiEntityRole.Blue, "Blue");
+            Red = new AiSimEntity(AiEntityRole.Red, "Red");
+            ApplyScenarioPreset(AiScenarioPreset.ShipDuel);
+        }
+
+        internal AiSimEntity Blue { get; }
+        internal AiSimEntity Red { get; }
+        internal AiScenarioPreset ScenarioPreset { get; private set; } = AiScenarioPreset.ShipDuel;
+
+        internal float PlaybackSpeed { get; set; } = 1f;
+        internal float GridZoom { get; set; } = 1f;
+        internal float SimulationTime { get; private set; }
+
+        internal bool Playing { get; set; } = true;
+        internal bool ShowInspector { get; set; } = true;
+        internal bool ShowTrail { get; set; } = true;
+        internal bool ShowDesiredTrail { get; set; } = true;
+        internal bool ShowRawSteer { get; set; } = true;
+        internal bool ShowMotionPoint { get; set; } = true;
+        internal bool ShowLegend { get; set; } = true;
+        internal bool ShowImportDetails { get; set; }
+
+        internal string ImportStatus { get; set; } = "Standalone duel sandbox. Blue import is optional.";
+        internal string ImportedBehaviour { get; set; }
+        internal string ImportedManoeuvre { get; set; }
+        internal string ImportedMainframe { get; set; }
+        internal int SelectedImportIndex { get; set; } = -1;
+
+        internal List<AiImportCandidate> ImportCandidates { get; } = new List<AiImportCandidate>();
+        internal List<string> ImportedParameters { get; } = new List<string>();
+        internal List<AiControlRequestSnapshot> ImportedRequests { get; } = new List<AiControlRequestSnapshot>();
+
+        internal AiSimulationPreset Preset { get => Blue.Preset; set => Blue.Preset = value; }
+        internal AiSimulationSide Side { get => Blue.Side; set => Blue.Side = value; }
+        internal AiCraftProfile CraftProfile => Blue.CraftProfile;
+        internal AiCraftMovementModel CraftMovementModel { get => Blue.CraftMovementModel; set => Blue.CraftMovementModel = value; }
+        internal float Radius { get => Blue.Radius; set => Blue.Radius = value; }
+        internal float BroadsideOuterRadius { get => Blue.BroadsideOuterRadius; set => Blue.BroadsideOuterRadius = value; }
+        internal float BroadsideAngle { get => Blue.BroadsideAngle; set => Blue.BroadsideAngle = value; }
+        internal float CircleMinApproachAngle { get => Blue.CircleMinApproachAngle; set => Blue.CircleMinApproachAngle = value; }
+        internal float CraftSpeed { get => Blue.CraftSpeed; set => Blue.CraftSpeed = value; }
+        internal float CraftAcceleration { get => Blue.CraftAcceleration; set => Blue.CraftAcceleration = value; }
+        internal float CraftTurnRate { get => Blue.CraftTurnRate; set => Blue.CraftTurnRate = value; }
+        internal float CraftCurrentSpeed => Blue.CraftCurrentSpeed;
+        internal float ShipTarryDistance { get => Blue.ShipTarryDistance; set => Blue.ShipTarryDistance = value; }
+        internal bool ShipReverseAllowed { get => Blue.ShipReverseAllowed; set => Blue.ShipReverseAllowed = value; }
+        internal float HoverStrafeAuthority { get => Blue.HoverStrafeAuthority; set => Blue.HoverStrafeAuthority = value; }
+        internal float HoverMoveWithinAzimuth { get => Blue.HoverMoveWithinAzimuth; set => Blue.HoverMoveWithinAzimuth = value; }
+        internal float AirplaneMinimumSpeed { get => Blue.AirplaneMinimumSpeed; set => Blue.AirplaneMinimumSpeed = value; }
+        internal Vector3 TargetPosition => Red.Position;
+        internal Vector3 TargetVelocity => Red.Velocity;
+        internal Vector3 TargetHeading => Red.Heading;
+        internal Vector3 CraftPosition => Blue.Position;
+        internal Vector3 CraftHeading => Blue.Heading;
+        internal Vector3 CraftVelocity => Blue.Velocity;
+        internal List<Vector3> Trail => Blue.Trail;
+        internal List<Vector3> DesiredTrail => Blue.IntentTrail;
+        internal List<Vector3> TargetTrail => Red.Trail;
+        internal AiSimulationNavalState NavalState => Blue.NavalState;
+        internal AiTargetProfile TargetProfile => AiTargetProfile.Ship;
+
+        internal void Reset()
+        {
+            ResetScenario();
+        }
+
+        internal void ResetScenario()
+        {
+            SimulationTime = 0f;
+            float spacing = Mathf.Max(Blue.Radius, Red.Radius) + 80f;
+            Vector3 bluePosition = new Vector3(spacing, Blue.Altitude, 0f);
+            Vector3 redPosition = new Vector3(0f, Red.Altitude, 0f);
+            Blue.ResetMotion(bluePosition, InitialHeading(Blue, bluePosition, redPosition));
+            Red.ResetMotion(redPosition, InitialHeading(Red, redPosition, bluePosition));
+
+            AiDuelFrame frame = BuildDuelFrame();
+            Blue.AddIntentPoint(FrameMotionPoint(frame.Blue));
+            Red.AddIntentPoint(FrameMotionPoint(frame.Red));
+        }
+
+        internal void ResetCraft()
+        {
+            ResetScenario();
+        }
+
+        internal void ResetTargetPath()
+        {
+            ResetScenario();
+        }
+
+        internal void Step(float deltaSeconds)
+        {
+            float delta = Mathf.Max(0f, deltaSeconds) * Mathf.Max(0f, PlaybackSpeed);
+            if (delta <= 0f)
+                return;
+
+            AiPlanInput blueInput = BuildPlannerInput(Blue, Red);
+            AiPlanInput redInput = BuildPlannerInput(Red, Blue);
+            Blue.NavalState = AiBehaviourPlanner.AdvanceNavalState(blueInput);
+            Red.NavalState = AiBehaviourPlanner.AdvanceNavalState(redInput);
+
+            blueInput.NavalState = Blue.NavalState;
+            redInput.NavalState = Red.NavalState;
+            AiSimulationFrame blueFrame = BuildEntityFrame(Blue, Red, blueInput);
+            AiSimulationFrame redFrame = BuildEntityFrame(Red, Blue, redInput);
+
+            AiManoeuvreSimulator.Advance(Blue, blueFrame, delta);
+            AiManoeuvreSimulator.Advance(Red, redFrame, delta);
+
+            SimulationTime += delta;
+            Blue.AddTrailPoint(Blue.Position);
+            Red.AddTrailPoint(Red.Position);
+
+            AiDuelFrame updated = BuildDuelFrame();
+            Blue.AddIntentPoint(FrameMotionPoint(updated.Blue));
+            Red.AddIntentPoint(FrameMotionPoint(updated.Red));
+        }
+
+        internal void SetPreset(AiSimulationPreset preset)
+        {
+            if (Blue.Preset == preset)
+                return;
+
+            Blue.Preset = preset;
+            ResetScenario();
+        }
+
+        internal void SetCraftProfile(AiCraftProfile profile)
+        {
+            Blue.ApplyCraftProfile(profile);
+            ResetScenario();
+        }
+
+        internal void SetTargetProfile(AiTargetProfile profile)
+        {
+            switch (profile)
+            {
+                case AiTargetProfile.FastMover:
+                    Red.ApplyCraftProfile(AiCraftProfile.FastAircraft);
+                    break;
+                case AiTargetProfile.Plane:
+                    Red.ApplyCraftProfile(AiCraftProfile.Airplane);
+                    break;
+                case AiTargetProfile.SlowMover:
+                    Red.ApplyCraftProfile(AiCraftProfile.SurfaceShip);
+                    Red.CraftSpeed = 18f;
+                    break;
+                case AiTargetProfile.Static:
+                    Red.ApplyCraftProfile(AiCraftProfile.SurfaceShip);
+                    Red.CraftSpeed = 0f;
+                    break;
+                case AiTargetProfile.Ship:
+                default:
+                    Red.ApplyCraftProfile(AiCraftProfile.SurfaceShip);
+                    break;
+            }
+
+            ResetScenario();
+        }
+
+        internal void SetTargetAltitude(float altitude)
+        {
+            Red.Altitude = Mathf.Max(0f, altitude);
+            Red.Position = new Vector3(Red.Position.x, Red.Altitude, Red.Position.z);
+        }
+
+        internal void ApplyScenarioPreset(AiScenarioPreset preset)
+        {
+            ScenarioPreset = preset;
+            switch (preset)
+            {
+                case AiScenarioPreset.BroadsideDuel:
+                    ConfigureShip(Blue, AiSimulationPreset.NavalBroadside, 350f, 520f, AiSimulationSide.Both);
+                    ConfigureShip(Red, AiSimulationPreset.NavalBroadside, 350f, 520f, AiSimulationSide.Both);
+                    break;
+                case AiScenarioPreset.HoverDuel:
+                    ConfigureHover(Blue, AiSimulationPreset.PointAt, 260f);
+                    ConfigureSixAxis(Red, AiSimulationPreset.PointAt, 240f);
+                    break;
+                case AiScenarioPreset.PlaneIntercept:
+                    ConfigureAircraft(Blue, AiCraftProfile.Airplane, AiSimulationPreset.PointAt, 450f);
+                    ConfigureAircraft(Red, AiCraftProfile.FastAircraft, AiSimulationPreset.Circle, 550f);
+                    Red.Side = AiSimulationSide.Left;
+                    break;
+                case AiScenarioPreset.ShipDuel:
+                default:
+                    ConfigureShip(Blue, AiSimulationPreset.Circle, 220f, 320f, AiSimulationSide.Both);
+                    ConfigureShip(Red, AiSimulationPreset.Broadside, 260f, 380f, AiSimulationSide.Left);
+                    break;
+            }
+
+            ResetScenario();
+        }
+
+        internal AiDuelFrame BuildDuelFrame()
+        {
+            return new AiDuelFrame
+            {
+                Blue = BuildEntityFrame(Blue, Red, BuildPlannerInput(Blue, Red)),
+                Red = BuildEntityFrame(Red, Blue, BuildPlannerInput(Red, Blue))
+            };
+        }
+
+        internal AiSimulationFrame BuildFrame()
+        {
+            return BuildDuelFrame().Blue;
+        }
+
+        internal List<Vector3> BuildTargetFuturePath(int steps, float stepSeconds)
+        {
+            var path = new List<Vector3>();
+            Vector3 position = Red.Position;
+            Vector3 heading = Red.Heading;
+            float speed = Mathf.Max(0f, Red.CraftSpeed);
+            for (int i = 0; i < steps; i++)
+            {
+                position += heading * speed * stepSeconds;
+                path.Add(position);
+            }
+
+            return path;
+        }
+
+        internal float OrbitDirection()
+        {
+            return Blue.Side == AiSimulationSide.Left ? 1f : -1f;
+        }
+
+        internal string TargetProfileName() => Red.Name;
+
+        internal string CraftMovementModelName() => CraftMovementModelName(Blue.CraftMovementModel);
+
+        internal string CraftProfileName() => CraftProfileName(Blue.CraftProfile);
+
+        internal string ScenarioPresetName() => ScenarioPresetName(ScenarioPreset);
+
+        internal static string PresetName(AiSimulationPreset preset)
+        {
+            switch (preset)
+            {
+                case AiSimulationPreset.PointAt:
+                    return "Point At";
+                case AiSimulationPreset.Broadside:
+                    return "Broadside";
+                case AiSimulationPreset.NavalBroadside:
+                    return "Naval 2.0";
+                default:
+                    return "Circle";
+            }
+        }
+
+        internal static string CraftMovementModelName(AiCraftMovementModel model)
+        {
+            switch (model)
+            {
+                case AiCraftMovementModel.Hover:
+                    return "Hover";
+                case AiCraftMovementModel.SixAxis:
+                    return "Six-axis";
+                case AiCraftMovementModel.Airplane:
+                    return "Airplane";
+                default:
+                    return "Ship / Tank";
+            }
+        }
+
+        internal static string CraftProfileName(AiCraftProfile profile)
+        {
+            switch (profile)
+            {
+                case AiCraftProfile.Hovercraft:
+                    return "Hovercraft";
+                case AiCraftProfile.SixAxisDrone:
+                    return "Six-axis";
+                case AiCraftProfile.Airplane:
+                    return "Airplane";
+                case AiCraftProfile.FastAircraft:
+                    return "Fast aircraft";
+                default:
+                    return "Surface ship";
+            }
+        }
+
+        internal static string ScenarioPresetName(AiScenarioPreset preset)
+        {
+            switch (preset)
+            {
+                case AiScenarioPreset.BroadsideDuel:
+                    return "Broadside duel";
+                case AiScenarioPreset.HoverDuel:
+                    return "Hover duel";
+                case AiScenarioPreset.PlaneIntercept:
+                    return "Plane intercept";
+                default:
+                    return "Ship duel";
+            }
+        }
+
+        internal static Vector3 FrameMotionPoint(AiSimulationFrame frame)
+        {
+            return frame.HasMotionPoint ? frame.MotionPoint : frame.DesiredPoint;
+        }
+
+        private static void ConfigureShip(
+            AiSimEntity entity,
+            AiSimulationPreset preset,
+            float radius,
+            float outerRadius,
+            AiSimulationSide side)
+        {
+            entity.ApplyCraftProfile(AiCraftProfile.SurfaceShip);
+            entity.Preset = preset;
+            entity.Side = side;
+            entity.Radius = radius;
+            entity.BroadsideOuterRadius = outerRadius;
+            entity.BroadsideAngle = 75f;
+            entity.CircleMinApproachAngle = 45f;
+        }
+
+        private static void ConfigureHover(AiSimEntity entity, AiSimulationPreset preset, float radius)
+        {
+            entity.ApplyCraftProfile(AiCraftProfile.Hovercraft);
+            entity.Preset = preset;
+            entity.Side = AiSimulationSide.Both;
+            entity.Radius = radius;
+            entity.BroadsideOuterRadius = radius + 120f;
+        }
+
+        private static void ConfigureSixAxis(AiSimEntity entity, AiSimulationPreset preset, float radius)
+        {
+            entity.ApplyCraftProfile(AiCraftProfile.SixAxisDrone);
+            entity.Preset = preset;
+            entity.Side = AiSimulationSide.Both;
+            entity.Radius = radius;
+            entity.BroadsideOuterRadius = radius + 120f;
+        }
+
+        private static void ConfigureAircraft(
+            AiSimEntity entity,
+            AiCraftProfile profile,
+            AiSimulationPreset preset,
+            float radius)
+        {
+            entity.ApplyCraftProfile(profile);
+            entity.Preset = preset;
+            entity.Side = AiSimulationSide.Both;
+            entity.Radius = radius;
+            entity.BroadsideOuterRadius = radius + 180f;
+        }
+
+        private static Vector3 InitialHeading(AiSimEntity entity, Vector3 selfPosition, Vector3 targetPosition)
+        {
+            Vector3 toTarget = PlanarMath.SafePlanarDirection(selfPosition, targetPosition, entity.Role == AiEntityRole.Blue ? Vector3.left : Vector3.right);
+            if (entity.Preset == AiSimulationPreset.Circle)
+                return PlanarMath.RotateYaw(toTarget, entity.Side == AiSimulationSide.Left ? 90f : -90f);
+            return toTarget;
+        }
+
+        private AiSimulationFrame BuildEntityFrame(AiSimEntity entity, AiSimEntity target, AiPlanInput input)
+        {
+            AiBehaviourPlan plan = AiBehaviourPlanner.Plan(input);
+            return new AiSimulationFrame
+            {
+                Role = entity.Role,
+                EntityName = entity.Name,
+                TargetEntityName = target.Name,
+                Preset = entity.Preset,
+                TargetPosition = target.Position,
+                TargetVelocity = target.Velocity,
+                TargetHeading = target.Heading,
+                CraftPosition = entity.Position,
+                CraftVelocity = entity.Velocity,
+                CraftHeading = entity.Heading,
+                DesiredPoint = plan.RawSteerPoint,
+                RawSteerPoint = plan.RawSteerPoint,
+                MotionPoint = plan.MotionPoint,
+                DesiredFacing = plan.DesiredFacing,
+                DesiredTravel = plan.DesiredTravel,
+                ToTarget = plan.ToTarget,
+                Radius = entity.Radius,
+                BroadsideAngle = plan.BroadsideAngle,
+                Range = plan.Range,
+                GroundRange = plan.GroundRange,
+                Azimuth = plan.Azimuth,
+                Kind = plan.Kind,
+                Summary = $"{entity.Name}: {plan.Summary}",
+                AiState = plan.AiState,
+                ApproximationNote = MovementApproximationNote(entity, plan),
+                TargetProfile = target.Name,
+                TargetSpeed = target.Velocity.magnitude,
+                CraftMovementModel = CraftMovementModelName(entity.CraftMovementModel),
+                CraftProfile = CraftProfileName(entity.CraftProfile),
+                Approximate = true,
+                HasDesiredPoint = plan.HasRawSteerPoint,
+                HasRawSteerPoint = plan.HasRawSteerPoint,
+                HasMotionPoint = plan.HasMotionPoint,
+                HasDesiredFacing = plan.HasDesiredFacing,
+                ReversePreferred = plan.ReversePreferred
+            };
+        }
+
+        private static string MovementApproximationNote(AiSimEntity entity, AiBehaviourPlan plan)
+        {
+            string movement;
+            switch (entity.CraftMovementModel)
+            {
+                case AiCraftMovementModel.Hover:
+                    movement = "hover manoeuvre approximates yaw-lock/strafe PID";
+                    break;
+                case AiCraftMovementModel.SixAxis:
+                    movement = "six-axis manoeuvre approximates independent PID axes";
+                    break;
+                case AiCraftMovementModel.Airplane:
+                    movement = "airplane manoeuvre approximates thrust/banking/altitude PID";
+                    break;
+                default:
+                    movement = "ship/tank manoeuvre approximates tarry/reverse/yaw PID";
+                    break;
+            }
+
+            return string.IsNullOrWhiteSpace(plan.ApproximationNote)
+                ? movement
+                : $"{plan.ApproximationNote}; {movement}";
+        }
+
+        private static AiPlanInput BuildPlannerInput(AiSimEntity entity, AiSimEntity target)
+        {
+            return new AiPlanInput
+            {
+                Preset = entity.Preset,
+                Side = entity.Side,
+                NavalState = entity.NavalState,
+                CraftPosition = entity.Position,
+                CraftHeading = entity.Heading,
+                CraftVelocity = entity.Velocity,
+                TargetPosition = target.Position,
+                TargetVelocity = target.Velocity,
+                TargetProfileName = target.Name,
+                TargetSpeed = target.Velocity.magnitude,
+                Radius = entity.Radius,
+                BroadsideOuterRadius = entity.BroadsideOuterRadius,
+                BroadsideAngle = entity.BroadsideAngle,
+                CircleMinApproachAngle = entity.CircleMinApproachAngle,
+                CraftSpeed = entity.CraftSpeed
+            };
+        }
+    }
+
+    internal struct AiDuelFrame
+    {
+        internal AiSimulationFrame Blue;
+        internal AiSimulationFrame Red;
+    }
+
     internal struct AiSimulationFrame
     {
+        internal AiEntityRole Role;
+        internal string EntityName;
+        internal string TargetEntityName;
         internal AiSimulationPreset Preset;
         internal Vector3 TargetPosition;
         internal Vector3 TargetVelocity;
@@ -992,13 +729,17 @@ namespace CombatManager.Ai
         internal static AiSimulationGridProjection For(Rect rect, AiSimulationState state)
         {
             float zoom = Mathf.Clamp(state.GridZoom, 0.5f, 3f);
-            float radius = Mathf.Max(120f, state.Radius * 1.25f) / zoom;
+            float duelRange = PlanarMath.GroundDistance(state.Blue.Position, state.Red.Position);
+            float desiredSpan = Mathf.Max(
+                Mathf.Max(state.Blue.Radius, state.Red.Radius) * 1.45f,
+                duelRange * 1.15f);
+            float radius = Mathf.Max(160f, desiredSpan) / zoom;
             float shortestSide = Mathf.Max(1f, Mathf.Min(rect.width, rect.height));
             float metersPerPixel = radius * 2f / shortestSide;
             return new AiSimulationGridProjection
             {
                 Rect = rect,
-                OriginWorld = state.TargetPosition,
+                OriginWorld = state.Red.Position,
                 VisibleRadius = radius,
                 VisibleHalfWidth = rect.width * metersPerPixel * 0.5f,
                 VisibleHalfHeight = rect.height * metersPerPixel * 0.5f,
@@ -1027,17 +768,5 @@ namespace CombatManager.Ai
 
             return new Vector2(flat.x, -flat.z).normalized * pixels;
         }
-    }
-
-    internal struct SyntheticTargetInfo
-    {
-        internal bool Valid;
-        internal Vector3 Position;
-        internal Vector3 Velocity;
-        internal Vector3 Direction;
-        internal Vector3 DirectionFlat;
-        internal float Range;
-        internal float GroundDistance;
-        internal float Azimuth;
     }
 }

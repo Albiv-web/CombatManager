@@ -46,7 +46,7 @@ namespace CombatManager.Ui
             CombatManagerTheme.Ensure();
             EnsureWindow();
             ClampWindow();
-            _window = GUI.Window(483210, _window, DrawWindow, "CombatManager AI Sandbox", CombatManagerTheme.Window);
+            _window = GUI.Window(483210, _window, DrawWindow, "CombatManager AI Duel Sandbox", CombatManagerTheme.Window);
         }
 
         private void EnsureWindow()
@@ -56,11 +56,7 @@ namespace CombatManager.Ui
 
             float width = Mathf.Clamp(Screen.width * 0.8f, MinWindowWidth, Mathf.Max(MinWindowWidth, Screen.width - 40f));
             float height = Mathf.Clamp(Screen.height * 0.8f, MinWindowHeight, Mathf.Max(MinWindowHeight, Screen.height - 40f));
-            _window = new Rect(
-                (Screen.width - width) * 0.5f,
-                (Screen.height - height) * 0.5f,
-                width,
-                height);
+            _window = new Rect((Screen.width - width) * 0.5f, (Screen.height - height) * 0.5f, width, height);
             _windowInitialised = true;
         }
 
@@ -87,7 +83,7 @@ namespace CombatManager.Ui
         private void DrawWindow(int id)
         {
             DrawWindowBackdrop();
-            GUI.Label(new Rect(0f, 2f, _window.width, 20f), "CombatManager AI Sandbox", CombatManagerTheme.Title);
+            GUI.Label(new Rect(0f, 2f, _window.width, 20f), "CombatManager AI Duel Sandbox", CombatManagerTheme.Title);
 
             Rect client = new Rect(10f, 26f, _window.width - 20f, _window.height - 36f);
             Rect toolbar = new Rect(client.x, client.y, client.width, 30f);
@@ -96,7 +92,6 @@ namespace CombatManager.Ui
             DrawToolbar(toolbar);
             DrawBody(body);
             DrawResizeHandle();
-
             GUI.DragWindow(new Rect(0f, 0f, _window.width - 26f, 22f));
         }
 
@@ -104,7 +99,7 @@ namespace CombatManager.Ui
         {
             GUILayout.BeginArea(rect);
             GUILayout.BeginHorizontal();
-            GUILayout.Label("Standalone sandbox", CombatManagerTheme.Header, GUILayout.Width(190f));
+            GUILayout.Label("Symmetric duel", CombatManagerTheme.Header, GUILayout.Width(190f));
 
             if (GUILayout.Button(_state.Playing ? "Pause" : "Play", _state.Playing ? CombatManagerTheme.ActiveButton : CombatManagerTheme.Button, GUILayout.Width(74f)))
                 _state.Playing = !_state.Playing;
@@ -118,7 +113,7 @@ namespace CombatManager.Ui
             if (GUILayout.Button("Reset", CombatManagerTheme.Button, GUILayout.Width(62f)))
                 _state.ResetScenario();
 
-            if (GUILayout.Button("Import Current AI", CombatManagerTheme.Button, GUILayout.Width(128f)))
+            if (GUILayout.Button("Import Blue AI", CombatManagerTheme.Button, GUILayout.Width(128f)))
             {
                 AiSimulationImporter.TryImport(GetFocusedConstruct(), _state, out string message);
                 _state.ImportStatus = message;
@@ -137,7 +132,7 @@ namespace CombatManager.Ui
 
         private void DrawBody(Rect rect)
         {
-            float inspectorWidth = _state.ShowInspector ? Mathf.Min(330f, rect.width * 0.42f) : 0f;
+            float inspectorWidth = _state.ShowInspector ? Mathf.Min(360f, rect.width * 0.45f) : 0f;
             Rect inspector = new Rect(rect.x, rect.y, inspectorWidth, rect.height);
             Rect gridArea = _state.ShowInspector
                 ? new Rect(inspector.xMax + 8f, rect.y, rect.width - inspectorWidth - 8f, rect.height)
@@ -154,120 +149,15 @@ namespace CombatManager.Ui
             GUILayout.BeginArea(rect, CombatManagerTheme.Panel);
             _inspectorScroll = GUILayout.BeginScrollView(_inspectorScroll);
 
-            GUILayout.Label("Scenario", CombatManagerTheme.Header);
-            GUILayout.BeginHorizontal();
-            ScenarioButton("Ship circle", AiScenarioPreset.ShipCircle);
-            ScenarioButton("Hover point", AiScenarioPreset.HoverPointAt);
-            GUILayout.EndHorizontal();
-            GUILayout.BeginHorizontal();
-            ScenarioButton("Naval 2.0", AiScenarioPreset.NavalBroadside);
-            ScenarioButton("Plane intercept", AiScenarioPreset.PlaneIntercept);
-            GUILayout.EndHorizontal();
-
+            DrawScenarioControls();
             GUILayout.Space(8f);
-            GUILayout.Label("Behaviour", CombatManagerTheme.Header);
-            GUILayout.Space(4f);
-
-            GUILayout.BeginHorizontal();
-            PresetButton("Circle", AiSimulationPreset.Circle);
-            PresetButton("Point At", AiSimulationPreset.PointAt);
-            GUILayout.EndHorizontal();
-            GUILayout.BeginHorizontal();
-            PresetButton("Broadside", AiSimulationPreset.Broadside);
-            PresetButton("Naval 2.0", AiSimulationPreset.NavalBroadside);
-            GUILayout.EndHorizontal();
-
+            DrawEntityControls(_state.Blue, "Blue Mainframe");
             GUILayout.Space(8f);
-            DrawTargetControls();
-
+            DrawEntityControls(_state.Red, "Red Mainframe");
             GUILayout.Space(8f);
-            GUILayout.Label("Manoeuvre", CombatManagerTheme.Header);
-            GUILayout.Label("Preferred side", CombatManagerTheme.Mini);
-            GUILayout.BeginHorizontal();
-            SideButton("Auto/Both", AiSimulationSide.Both);
-            SideButton("Left", AiSimulationSide.Left);
-            SideButton("Right", AiSimulationSide.Right);
-            GUILayout.EndHorizontal();
-
+            DrawVisualControls();
             GUILayout.Space(8f);
-            float radius = SliderRow("Distance / radius", _state.Radius, 25f, 1500f, "m");
-            if (!Mathf.Approximately(radius, _state.Radius))
-            {
-                _state.Radius = radius;
-                _state.BroadsideOuterRadius = Mathf.Max(_state.BroadsideOuterRadius, radius + 20f);
-                _state.ResetScenario();
-            }
-
-            _state.PlaybackSpeed = SliderRow("Playback speed", _state.PlaybackSpeed, 0.1f, 5f, "x");
-
-            if (_state.Preset == AiSimulationPreset.Broadside || _state.Preset == AiSimulationPreset.NavalBroadside)
-                _state.BroadsideAngle = SliderRow("Broadside angle", _state.BroadsideAngle, 10f, 170f, "deg");
-            if (_state.Preset == AiSimulationPreset.NavalBroadside)
-                _state.BroadsideOuterRadius = SliderRow("Leave range", _state.BroadsideOuterRadius, _state.Radius + 20f, 2500f, "m");
-
-            GUILayout.Space(8f);
-            GUILayout.Label("Craft", CombatManagerTheme.Header);
-            GUILayout.Label("Craft profile", CombatManagerTheme.Mini);
-            GUILayout.BeginHorizontal();
-            CraftProfileButton("Ship", AiCraftProfile.SurfaceShip);
-            CraftProfileButton("Hover", AiCraftProfile.Hovercraft);
-            GUILayout.EndHorizontal();
-            GUILayout.BeginHorizontal();
-            CraftProfileButton("Plane", AiCraftProfile.Airplane);
-            CraftProfileButton("Fast plane", AiCraftProfile.FastAircraft);
-            GUILayout.EndHorizontal();
-            GUILayout.Space(4f);
-            GUILayout.Label("Movement card model", CombatManagerTheme.Mini);
-            GUILayout.BeginHorizontal();
-            MovementModelButton("Ship", AiCraftMovementModel.ShipOrTank);
-            MovementModelButton("Hover", AiCraftMovementModel.HoverSixAxis);
-            MovementModelButton("Plane", AiCraftMovementModel.Airplane);
-            GUILayout.EndHorizontal();
-            _state.CraftSpeed = SliderRow("Max speed", _state.CraftSpeed, 1f, 160f, "m/s");
-            _state.CraftTurnRate = SliderRow("Turn rate", _state.CraftTurnRate, 5f, 240f, "deg/s");
-            _state.CraftAcceleration = SliderRow("Acceleration", _state.CraftAcceleration, 1f, 80f, "m/s2");
-            if (_state.CraftMovementModel == AiCraftMovementModel.ShipOrTank)
-                _state.ShipTarryDistance = SliderRow("Tarry distance", _state.ShipTarryDistance, 0f, 120f, "m");
-            if (_state.CraftMovementModel == AiCraftMovementModel.HoverSixAxis)
-                _state.HoverStrafeAuthority = SliderRow("Strafe authority", _state.HoverStrafeAuthority, 0.1f, 1f, "x");
-            if (_state.CraftMovementModel == AiCraftMovementModel.Airplane)
-                _state.AirplaneMinimumSpeed = SliderRow("Minimum speed", _state.AirplaneMinimumSpeed, 0f, 120f, "m/s");
-            if (GUILayout.Button("Reset Craft", CombatManagerTheme.Button))
-                _state.ResetCraft();
-
-            GUILayout.Space(10f);
-            GUILayout.Label("Visuals", CombatManagerTheme.Header);
-            _state.GridZoom = SliderRow("Zoom", _state.GridZoom, 0.5f, 3f, "x");
-            GUILayout.BeginHorizontal();
-            if (GUILayout.Button("Fit Orbit", CombatManagerTheme.Button))
-                _state.GridZoom = 1f;
-            _state.ShowTrail = ToggleButton("Show Trail", _state.ShowTrail);
-            _state.ShowDesiredTrail = ToggleButton("AI Trail", _state.ShowDesiredTrail);
-            GUILayout.EndHorizontal();
-            GUILayout.BeginHorizontal();
-            _state.ShowRawSteer = ToggleButton("Raw Steer", _state.ShowRawSteer);
-            _state.ShowMotionPoint = ToggleButton("Motion Point", _state.ShowMotionPoint);
-            GUILayout.EndHorizontal();
-            GUILayout.BeginHorizontal();
-            _state.ShowTargetPath = ToggleButton("Target Path", _state.ShowTargetPath);
-            _state.ShowLegend = ToggleButton("Legend", _state.ShowLegend);
-            GUILayout.EndHorizontal();
-
-            GUILayout.Space(10f);
-            GUILayout.Label("Status", CombatManagerTheme.Header);
-            AiSimulationFrame frame = _state.BuildFrame();
-            GUILayout.Label(frame.Summary, CombatManagerTheme.BodyWrap);
-            GUILayout.Label($"Range {frame.GroundRange:0.#}m | Azimuth {frame.Azimuth:0.#} deg", CombatManagerTheme.BodyWrap);
-            GUILayout.Label($"Craft: {frame.CraftProfile} | Movement card: {frame.CraftMovementModel}", CombatManagerTheme.BodyWrap);
-            if (frame.HasRawSteerPoint && frame.HasMotionPoint)
-                GUILayout.Label($"Raw steer {PlanarMath.GroundDistance(frame.CraftPosition, frame.RawSteerPoint):0.#}m | motion point {PlanarMath.GroundDistance(frame.CraftPosition, frame.MotionPoint):0.#}m", CombatManagerTheme.BodyWrap);
-            if (frame.ReversePreferred)
-                GUILayout.Label("Movement note: reverse preferred for this intent.", CombatManagerTheme.Warning);
-            GUILayout.Label($"{frame.Kind}: {frame.AiState}{(frame.Approximate ? " (approximated)" : string.Empty)}", frame.Approximate ? CombatManagerTheme.Warning : CombatManagerTheme.BodyWrap);
-            if (!string.IsNullOrWhiteSpace(frame.ApproximationNote))
-                GUILayout.Label(frame.ApproximationNote, frame.Approximate ? CombatManagerTheme.Warning : CombatManagerTheme.Mini);
-            GUILayout.Label(_state.ImportStatus, CombatManagerTheme.Warning);
-
+            DrawStatusAndWarnings();
             GUILayout.Space(8f);
             DrawImportDrawer();
 
@@ -275,11 +165,135 @@ namespace CombatManager.Ui
             GUILayout.EndArea();
         }
 
-        private void PresetButton(string label, AiSimulationPreset preset)
+        private void DrawScenarioControls()
         {
-            GUIStyle style = _state.Preset == preset ? CombatManagerTheme.ActiveButton : CombatManagerTheme.Button;
-            if (GUILayout.Button(label, style))
-                _state.SetPreset(preset);
+            GUILayout.Label("Scenario", CombatManagerTheme.Header);
+            GUILayout.BeginHorizontal();
+            ScenarioButton("Ship Duel", AiScenarioPreset.ShipDuel);
+            ScenarioButton("Broadside", AiScenarioPreset.BroadsideDuel);
+            GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
+            ScenarioButton("Hover Duel", AiScenarioPreset.HoverDuel);
+            ScenarioButton("Plane Intercept", AiScenarioPreset.PlaneIntercept);
+            GUILayout.EndHorizontal();
+            _state.PlaybackSpeed = SliderRow("Playback speed", _state.PlaybackSpeed, 0.1f, 5f, "x");
+        }
+
+        private void DrawEntityControls(AiSimEntity entity, string header)
+        {
+            GUILayout.Label(header, CombatManagerTheme.Header);
+            GUILayout.Label($"{AiSimulationState.PresetName(entity.Preset)} | {AiSimulationState.CraftProfileName(entity.CraftProfile)} | {AiSimulationState.CraftMovementModelName(entity.CraftMovementModel)}", CombatManagerTheme.Mini);
+
+            GUILayout.Label("Behaviour card", CombatManagerTheme.Mini);
+            GUILayout.BeginHorizontal();
+            EntityPresetButton(entity, "Circle", AiSimulationPreset.Circle);
+            EntityPresetButton(entity, "Point At", AiSimulationPreset.PointAt);
+            GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
+            EntityPresetButton(entity, "Broadside", AiSimulationPreset.Broadside);
+            EntityPresetButton(entity, "Naval 2.0", AiSimulationPreset.NavalBroadside);
+            GUILayout.EndHorizontal();
+
+            GUILayout.Label("Preferred side", CombatManagerTheme.Mini);
+            GUILayout.BeginHorizontal();
+            EntitySideButton(entity, "Auto/Both", AiSimulationSide.Both);
+            EntitySideButton(entity, "Left", AiSimulationSide.Left);
+            EntitySideButton(entity, "Right", AiSimulationSide.Right);
+            GUILayout.EndHorizontal();
+
+            float radius = SliderRow("Distance / radius", entity.Radius, 25f, 1500f, "m");
+            if (!Mathf.Approximately(radius, entity.Radius))
+            {
+                entity.Radius = radius;
+                entity.BroadsideOuterRadius = Mathf.Max(entity.BroadsideOuterRadius, radius + 20f);
+                _state.ResetScenario();
+            }
+
+            if (entity.Preset == AiSimulationPreset.Broadside || entity.Preset == AiSimulationPreset.NavalBroadside)
+                entity.BroadsideAngle = SliderRow("Broadside angle", entity.BroadsideAngle, 10f, 170f, "deg");
+            if (entity.Preset == AiSimulationPreset.NavalBroadside)
+                entity.BroadsideOuterRadius = SliderRow("Leave range", entity.BroadsideOuterRadius, entity.Radius + 20f, 2500f, "m");
+
+            GUILayout.Label("Craft profile", CombatManagerTheme.Mini);
+            GUILayout.BeginHorizontal();
+            EntityCraftProfileButton(entity, "Ship", AiCraftProfile.SurfaceShip);
+            EntityCraftProfileButton(entity, "Hover", AiCraftProfile.Hovercraft);
+            GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
+            EntityCraftProfileButton(entity, "Six-axis", AiCraftProfile.SixAxisDrone);
+            EntityCraftProfileButton(entity, "Plane", AiCraftProfile.Airplane);
+            EntityCraftProfileButton(entity, "Fast", AiCraftProfile.FastAircraft);
+            GUILayout.EndHorizontal();
+
+            GUILayout.Label("Movement card model", CombatManagerTheme.Mini);
+            GUILayout.BeginHorizontal();
+            EntityMovementModelButton(entity, "Ship", AiCraftMovementModel.ShipOrTank);
+            EntityMovementModelButton(entity, "Hover", AiCraftMovementModel.Hover);
+            GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
+            EntityMovementModelButton(entity, "Six-axis", AiCraftMovementModel.SixAxis);
+            EntityMovementModelButton(entity, "Plane", AiCraftMovementModel.Airplane);
+            GUILayout.EndHorizontal();
+
+            entity.CraftSpeed = SliderRow("Max speed", entity.CraftSpeed, 0f, 180f, "m/s");
+            entity.CraftTurnRate = SliderRow("Turn rate", entity.CraftTurnRate, 5f, 240f, "deg/s");
+            entity.CraftAcceleration = SliderRow("Acceleration", entity.CraftAcceleration, 1f, 100f, "m/s2");
+            float altitude = SliderRow("Altitude", entity.Altitude, 0f, 900f, "m");
+            if (!Mathf.Approximately(altitude, entity.Altitude))
+            {
+                entity.Altitude = altitude;
+                entity.Position = new Vector3(entity.Position.x, entity.Altitude, entity.Position.z);
+            }
+
+            if (entity.CraftMovementModel == AiCraftMovementModel.ShipOrTank)
+                entity.ShipTarryDistance = SliderRow("Tarry distance", entity.ShipTarryDistance, 0f, 200f, "m");
+            if (entity.CraftMovementModel == AiCraftMovementModel.Hover)
+            {
+                entity.HoverYawLockDistance = SliderRow("Yaw lock", entity.HoverYawLockDistance, 0f, 1000f, "m");
+                entity.HoverMoveWithinAzimuth = SliderRow("Move within azi", entity.HoverMoveWithinAzimuth, 0f, 180f, "deg");
+            }
+            if (entity.CraftMovementModel == AiCraftMovementModel.SixAxis)
+                entity.SixAxisLookAheadDistance = SliderRow("Look ahead", entity.SixAxisLookAheadDistance, 10f, 5000f, "m");
+            if (entity.CraftMovementModel == AiCraftMovementModel.Airplane)
+            {
+                entity.AirplaneMinimumSpeed = SliderRow("Minimum speed", entity.AirplaneMinimumSpeed, 0f, 140f, "m/s");
+                entity.AirplaneBankingTurnAbove = SliderRow("Bank above", entity.AirplaneBankingTurnAbove, 0f, 90f, "deg");
+                entity.AirplaneBankingTurnRoll = SliderRow("Bank roll", entity.AirplaneBankingTurnRoll, 0f, 90f, "deg");
+            }
+        }
+
+        private void DrawVisualControls()
+        {
+            GUILayout.Label("Visuals", CombatManagerTheme.Header);
+            _state.GridZoom = SliderRow("Zoom", _state.GridZoom, 0.5f, 3f, "x");
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("Fit Duel", CombatManagerTheme.Button))
+                _state.GridZoom = 1f;
+            _state.ShowTrail = ToggleButton("Trails", _state.ShowTrail);
+            _state.ShowDesiredTrail = ToggleButton("AI Trails", _state.ShowDesiredTrail);
+            GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
+            _state.ShowRawSteer = ToggleButton("Raw Steer", _state.ShowRawSteer);
+            _state.ShowMotionPoint = ToggleButton("Motion Point", _state.ShowMotionPoint);
+            _state.ShowLegend = ToggleButton("Legend", _state.ShowLegend);
+            GUILayout.EndHorizontal();
+        }
+
+        private void DrawStatusAndWarnings()
+        {
+            GUILayout.Label("Warnings", CombatManagerTheme.Header);
+            AiDuelFrame frame = _state.BuildDuelFrame();
+            DrawFrameStatus(frame.Blue);
+            DrawFrameStatus(frame.Red);
+            GUILayout.Label("Simulation is read-only and approximates movement-card PID, propulsion, pathfinding, terrain, water, and firing-angle internals.", CombatManagerTheme.Warning);
+        }
+
+        private static void DrawFrameStatus(AiSimulationFrame frame)
+        {
+            GUILayout.Label($"{frame.EntityName}: {frame.Kind} | {frame.AiState}", CombatManagerTheme.BodyWrap);
+            GUILayout.Label($"range {frame.GroundRange:0.#}m | azimuth {frame.Azimuth:0.#} deg | {frame.CraftMovementModel}", CombatManagerTheme.Mini);
+            if (!string.IsNullOrWhiteSpace(frame.ApproximationNote))
+                GUILayout.Label(frame.ApproximationNote, CombatManagerTheme.Mini);
         }
 
         private void ScenarioButton(string label, AiScenarioPreset preset)
@@ -289,86 +303,50 @@ namespace CombatManager.Ui
                 _state.ApplyScenarioPreset(preset);
         }
 
-        private void SideButton(string label, AiSimulationSide side)
+        private void EntityPresetButton(AiSimEntity entity, string label, AiSimulationPreset preset)
         {
-            GUIStyle style = _state.Side == side ? CombatManagerTheme.ActiveButton : CombatManagerTheme.Button;
+            GUIStyle style = entity.Preset == preset ? CombatManagerTheme.ActiveButton : CombatManagerTheme.Button;
             if (GUILayout.Button(label, style))
             {
-                _state.Side = side;
-                _state.Reset();
-            }
-        }
-
-        private void DrawTargetControls()
-        {
-            GUILayout.Label("Target", CombatManagerTheme.Header);
-            GUILayout.BeginHorizontal();
-            TargetProfileButton("Static", AiTargetProfile.Static);
-            TargetProfileButton("Slow", AiTargetProfile.SlowMover);
-            TargetProfileButton("Ship", AiTargetProfile.Ship);
-            GUILayout.EndHorizontal();
-            GUILayout.BeginHorizontal();
-            TargetProfileButton("Fast", AiTargetProfile.FastMover);
-            TargetProfileButton("Plane", AiTargetProfile.Plane);
-            GUILayout.EndHorizontal();
-
-            GUILayout.Label("Path mode", CombatManagerTheme.Mini);
-            GUILayout.BeginHorizontal();
-            PathModeButton("Straight", AiTargetPathMode.Straight);
-            PathModeButton("Orbit", AiTargetPathMode.Orbit);
-            PathModeButton("S-Curve", AiTargetPathMode.SCurve);
-            GUILayout.EndHorizontal();
-
-            _state.TargetSpeed = SliderRow("Target speed", _state.TargetSpeed, 0f, 140f, "m/s");
-            _state.TargetTurnRate = SliderRow("Turn rate", _state.TargetTurnRate, 0f, 20f, "deg/s");
-            float targetAltitude = SliderRow("Altitude", _state.TargetAltitude, 0f, 800f, "m");
-            if (!Mathf.Approximately(targetAltitude, _state.TargetAltitude))
-                _state.SetTargetAltitude(targetAltitude);
-            GUILayout.BeginHorizontal();
-            if (GUILayout.Button("Reset Target Path", CombatManagerTheme.Button))
-                _state.ResetTargetPath();
-            if (GUILayout.Button("Reset Scenario", CombatManagerTheme.Button))
+                entity.Preset = preset;
                 _state.ResetScenario();
-            GUILayout.EndHorizontal();
-        }
-
-        private void TargetProfileButton(string label, AiTargetProfile profile)
-        {
-            GUIStyle style = _state.TargetProfile == profile ? CombatManagerTheme.ActiveButton : CombatManagerTheme.Button;
-            if (GUILayout.Button(label, style))
-                _state.SetTargetProfile(profile);
-        }
-
-        private void PathModeButton(string label, AiTargetPathMode mode)
-        {
-            GUIStyle style = _state.TargetPathMode == mode ? CombatManagerTheme.ActiveButton : CombatManagerTheme.Button;
-            if (GUILayout.Button(label, style))
-            {
-                _state.TargetPathMode = mode;
-                _state.ResetTargetPath();
             }
         }
 
-        private void MovementModelButton(string label, AiCraftMovementModel model)
+        private void EntitySideButton(AiSimEntity entity, string label, AiSimulationSide side)
         {
-            GUIStyle style = _state.CraftMovementModel == model ? CombatManagerTheme.ActiveButton : CombatManagerTheme.Button;
+            GUIStyle style = entity.Side == side ? CombatManagerTheme.ActiveButton : CombatManagerTheme.Button;
             if (GUILayout.Button(label, style))
             {
-                _state.CraftMovementModel = model;
-                _state.ResetCraft();
+                entity.Side = side;
+                _state.ResetScenario();
             }
         }
 
-        private void CraftProfileButton(string label, AiCraftProfile profile)
+        private void EntityCraftProfileButton(AiSimEntity entity, string label, AiCraftProfile profile)
         {
-            GUIStyle style = _state.CraftProfile == profile ? CombatManagerTheme.ActiveButton : CombatManagerTheme.Button;
+            GUIStyle style = entity.CraftProfile == profile ? CombatManagerTheme.ActiveButton : CombatManagerTheme.Button;
             if (GUILayout.Button(label, style))
-                _state.SetCraftProfile(profile);
+            {
+                entity.ApplyCraftProfile(profile);
+                _state.ResetScenario();
+            }
+        }
+
+        private void EntityMovementModelButton(AiSimEntity entity, string label, AiCraftMovementModel model)
+        {
+            GUIStyle style = entity.CraftMovementModel == model ? CombatManagerTheme.ActiveButton : CombatManagerTheme.Button;
+            if (GUILayout.Button(label, style))
+            {
+                entity.CraftMovementModel = model;
+                _state.ResetScenario();
+            }
         }
 
         private void DrawImportDrawer()
         {
             GUILayout.Label("Import", CombatManagerTheme.Header);
+            GUILayout.Label("Import seeds Blue only. Red remains manually configured.", CombatManagerTheme.Mini);
             LabelPair("Mainframe", _state.ImportedMainframe);
             LabelPair("Behaviour", _state.ImportedBehaviour);
             LabelPair("Manoeuvre", _state.ImportedManoeuvre);
@@ -391,6 +369,7 @@ namespace CombatManager.Ui
             if (GUILayout.Button(label, CombatManagerTheme.Button))
                 _state.ShowImportDetails = !_state.ShowImportDetails;
 
+            GUILayout.Label(_state.ImportStatus, CombatManagerTheme.Warning);
             if (!_state.ShowImportDetails)
                 return;
 
