@@ -11,7 +11,8 @@ namespace CombatManager.Ui
         private static readonly Color Radial = new Color(0.6f, 0.9f, 1f, 0.45f);
         private static readonly Color Alternate = new Color(0.55f, 0.85f, 1f, 0.34f);
         private static readonly Color TargetPath = new Color(1f, 0.34f, 0.34f, 0.55f);
-        private static readonly Color DesiredPoint = new Color(1f, 0.72f, 0.2f, 1f);
+        private static readonly Color RawSteer = new Color(1f, 0.38f, 0.92f, 0.9f);
+        private static readonly Color MotionPoint = new Color(1f, 0.72f, 0.2f, 1f);
 
         internal static void Draw(Rect rect, AiSimulationState state)
         {
@@ -36,20 +37,27 @@ namespace CombatManager.Ui
                 DrawTrail(projection, state.DesiredTrail, new Color(1f, 0.72f, 0.2f, 0.48f));
 
             Vector2 target = projection.WorldToScreen(frame.TargetPosition);
+            Vector2 craft = projection.WorldToScreen(frame.CraftPosition);
             DrawTargetReticle(target);
             DrawArrow(target, projection.DirectionToScreen(frame.TargetVelocity, 52f), CombatManagerTheme.Target, 2f);
             DrawLabel(target + new Vector2(12f, 8f), $"{frame.TargetProfile} {frame.TargetSpeed:0.#}m/s");
 
-            if (frame.HasDesiredPoint)
+            if (state.ShowRawSteer && frame.HasRawSteerPoint)
             {
-                Vector3 point = frame.HasMotionPoint ? frame.MotionPoint : frame.DesiredPoint;
-                Vector2 desired = projection.WorldToScreen(point);
-                DrawPointMarker(desired, DesiredPoint);
-                DrawLine(projection.WorldToScreen(frame.CraftPosition), desired, DesiredPoint, 1f);
+                Vector3 rawVector = frame.RawSteerPoint - frame.CraftPosition;
+                Vector2 rawBearing = projection.DirectionToScreen(rawVector, 88f);
+                DrawArrow(craft + new Vector2(0f, 18f), rawBearing, RawSteer, 1f);
+                DrawLabel(craft + rawBearing + new Vector2(10f, 12f), "raw steer");
+            }
+
+            if (state.ShowMotionPoint && frame.HasMotionPoint)
+            {
+                Vector2 desired = projection.WorldToScreen(frame.MotionPoint);
+                DrawPointMarker(desired, MotionPoint);
+                DrawLine(craft, desired, MotionPoint, 1f);
                 DrawLabel(desired + new Vector2(12f, -20f), "AI motion point");
             }
 
-            Vector2 craft = projection.WorldToScreen(frame.CraftPosition);
             DrawLine(craft, target, Radial, 1f);
             DrawShip(craft, projection.DirectionToScreen(frame.CraftHeading, 1f), CombatManagerTheme.Craft);
             DrawArrow(craft, projection.DirectionToScreen(frame.CraftHeading, 48f), CombatManagerTheme.Craft, 3f);
@@ -212,14 +220,15 @@ namespace CombatManager.Ui
 
         private static void DrawLegend(Rect grid)
         {
-            Rect legend = new Rect(grid.xMax - 156f, grid.y + 10f, 146f, 92f);
+            Rect legend = new Rect(grid.xMax - 164f, grid.y + 10f, 154f, 110f);
             DrawFilledRect(legend, new Color(0.008f, 0.04f, 0.05f, 0.96f));
             DrawBorder(legend);
             GUI.Label(new Rect(legend.x + 8f, legend.y + 6f, 120f, 18f), "Legend", CombatManagerTheme.Mini);
             DrawLegendRow(legend.x + 8f, legend.y + 26f, CombatManagerTheme.Craft, "Heading");
             DrawLegendRow(legend.x + 8f, legend.y + 44f, CombatManagerTheme.Intent, "Travel");
-            DrawLegendRow(legend.x + 8f, legend.y + 62f, DesiredPoint, "AI motion");
-            DrawLegendRow(legend.x + 8f, legend.y + 80f, TargetPath, "Target path");
+            DrawLegendRow(legend.x + 8f, legend.y + 62f, RawSteer, "Raw steer");
+            DrawLegendRow(legend.x + 8f, legend.y + 80f, MotionPoint, "Motion point");
+            DrawLegendRow(legend.x + 8f, legend.y + 98f, TargetPath, "Target path");
         }
 
         private static void DrawLegendRow(float x, float y, Color color, string label)

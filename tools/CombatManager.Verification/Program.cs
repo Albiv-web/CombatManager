@@ -16,6 +16,7 @@ namespace CombatManager.Verification
                 GroundDistanceUsesOnlyXZ();
                 CraftMovesDuringCircleSimulation();
                 CircleMotionPointStaysFinite();
+                SharedPlannerSeparatesRawSteerFromMotionPoint();
                 CircleCraftSpeedStaysCapped();
                 TargetProjectionStaysCentered();
                 OrbitRingFitsResizeBounds();
@@ -28,6 +29,9 @@ namespace CombatManager.Verification
                 BroadsidePlannerFlipsSidePredictably();
                 CraftPursuitConvergesTowardStationaryDesiredPoint();
                 ShipTurnRateConstrainsMovementPath();
+                HoverMovementFacesTargetWhileTranslating();
+                AirplaneMaintainsForwardSpeed();
+                ScenarioPresetAppliesProfiles();
                 BuildFrameDoesNotMutateNavalState();
                 TargetAltitudeAppliesImmediately();
                 Console.WriteLine("CombatManager verification passed.");
@@ -112,6 +116,28 @@ namespace CombatManager.Verification
                 throw new InvalidOperationException($"circle raw steer point unexpectedly short: {rawSteerDistance}");
             if (motionDistance > 220f)
                 throw new InvalidOperationException($"circle motion point is too far for sandbox pursuit: {motionDistance}");
+        }
+
+        private static void SharedPlannerSeparatesRawSteerFromMotionPoint()
+        {
+            var state = new AiSimulationState
+            {
+                Preset = AiSimulationPreset.Circle,
+                Side = AiSimulationSide.Left,
+                Radius = 200f,
+                CraftSpeed = 45f
+            };
+            state.SetTargetProfile(AiTargetProfile.Static);
+            state.Reset();
+
+            AiSimulationFrame frame = state.BuildFrame();
+            if (!frame.HasRawSteerPoint || !frame.HasMotionPoint)
+                throw new InvalidOperationException("planner did not expose both raw steer and motion point");
+
+            float rawDistance = PlanarMath.GroundDistance(frame.CraftPosition, frame.RawSteerPoint);
+            float motionDistance = PlanarMath.GroundDistance(frame.CraftPosition, frame.MotionPoint);
+            if (rawDistance <= motionDistance * 3f)
+                throw new InvalidOperationException($"raw steer and motion point are not separated enough: raw {rawDistance}, motion {motionDistance}");
         }
 
         private static void CircleCraftSpeedStaysCapped()
@@ -304,10 +330,13 @@ namespace CombatManager.Verification
             slowTurn.Step(1f);
             fastTurn.Step(1f);
 
-            if (fastTurn.CraftPosition.x <= slowTurn.CraftPosition.x + 50f)
+            float slowTurned = Mathf.Abs(PlanarMath.SignedPlanarAngle(Vector3.forward, slowTurn.CraftHeading));
+            float fastTurned = Mathf.Abs(PlanarMath.SignedPlanarAngle(Vector3.forward, fastTurn.CraftHeading));
+
+            if (fastTurned <= slowTurned + 10f)
             {
                 throw new InvalidOperationException(
-                    $"turn rate did not materially affect ship path: slow x {slowTurn.CraftPosition.x}, fast x {fastTurn.CraftPosition.x}");
+                    $"turn rate did not materially affect heading: slow {slowTurned}, fast {fastTurned}");
             }
         }
 
@@ -315,8 +344,9 @@ namespace CombatManager.Verification
         {
             var state = new AiSimulationState
             {
-                Preset = AiSimulationPreset.PointAt,
-                Radius = 400f,
+                Preset = AiSimulationPreset.Circle,
+                Side = AiSimulationSide.Left,
+                Radius = 200f,
                 CraftSpeed = 50f,
                 CraftAcceleration = 50f,
                 CraftTurnRate = turnRate,
@@ -324,8 +354,65 @@ namespace CombatManager.Verification
             };
             state.SetTargetProfile(AiTargetProfile.Static);
             state.Reset();
-            state.Radius = 520f;
+            state.Radius = 260f;
             return state;
+        }
+
+        private static void HoverMovementFacesTargetWhileTranslating()
+        {
+            var state = new AiSimulationState
+            {
+                Preset = AiSimulationPreset.PointAt,
+                Radius = 520f
+            };
+            state.SetTargetProfile(AiTargetProfile.Static);
+            state.SetCraftProfile(AiCraftProfile.Hovercraft);
+            state.Reset();
+            state.Radius = 620f;
+
+            Vector3 before = state.CraftPosition;
+            state.Step(1f);
+            AiSimulationFrame frame = state.BuildFrame();
+            float facingError = Mathf.Abs(PlanarMath.SignedPlanarAngle(state.CraftHeading, frame.ToTarget));
+
+            if (state.CraftPosition.x <= before.x)
+                throw new InvalidOperationException("hover model did not translate toward the range point");
+            if (facingError > 15f)
+                throw new InvalidOperationException($"hover model did not keep facing target: {facingError} deg");
+        }
+
+        private static void AirplaneMaintainsForwardSpeed()
+        {
+            var state = new AiSimulationState
+            {
+                Preset = AiSimulationPreset.PointAt,
+                Radius = 450f
+            };
+            state.SetTargetProfile(AiTargetProfile.Plane);
+            state.SetCraftProfile(AiCraftProfile.Airplane);
+            state.Reset();
+
+            for (int i = 0; i < 8; i++)
+                state.Step(0.5f);
+
+            if (state.CraftCurrentSpeed < state.AirplaneMinimumSpeed - 0.01f)
+                throw new InvalidOperationException($"airplane fell below minimum speed: {state.CraftCurrentSpeed}");
+            if (state.CraftVelocity.magnitude <= 0.1f)
+                throw new InvalidOperationException("airplane model did not keep moving forward");
+        }
+
+        private static void ScenarioPresetAppliesProfiles()
+        {
+            var state = new AiSimulationState();
+            state.ApplyScenarioPreset(AiScenarioPreset.PlaneIntercept);
+
+            if (state.Preset != AiSimulationPreset.PointAt)
+                throw new InvalidOperationException("plane intercept did not set point-at behaviour");
+            if (state.TargetProfile != AiTargetProfile.Plane)
+                throw new InvalidOperationException("plane intercept did not set plane target profile");
+            if (state.CraftMovementModel != AiCraftMovementModel.Airplane)
+                throw new InvalidOperationException("plane intercept did not set airplane movement model");
+            AssertNear(450f, state.Radius, "plane intercept radius");
         }
 
         private static void BuildFrameDoesNotMutateNavalState()

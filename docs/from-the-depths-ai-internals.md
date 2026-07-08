@@ -446,6 +446,28 @@ for V1.x, then split it from `ManoeuvreAirplane` if we need closer fidelity.
 - Label anything involving terrain, water depth, collision avoidance, firing
   angle pathfinding, PID tuning, or real propulsion physics as approximate.
 
+## CombatManager Implementation Status
+
+V1.4 moves the sandbox closer to the real FTD split:
+
+- `AiBehaviourPlanner` is the shared planner layer for the standalone sandbox.
+  It outputs raw steer point, finite sandbox motion point, desired facing,
+  range, azimuth, side/state, and approximation notes.
+- The sandbox now treats the selected manoeuvre/movement card as a separate
+  movement model:
+  - Ship/tank: yaw-limited forward/reverse movement, turn slowdown, and tarry
+    distance.
+  - Hover/six-axis: independent translation and desired-facing rotation with
+    strafe authority.
+  - Airplane: continuous forward motion, minimum speed, and turn-radius-limited
+    heading changes.
+- Import lists mainframes from the focused craft and requires selection when
+  more than one supported mainframe is present. It imports behaviour,
+  manoeuvre, movement mode, firing mode, priority, supported behaviour
+  parameters, current read-only requests, and approximation context once only.
+- The grid names raw steer bearing separately from the finite motion point so
+  long vanilla steer points do not get confused with the sandbox chase point.
+
 ## Next Research Targets
 
 To improve fidelity, decompile and summarize these next:
@@ -462,14 +484,11 @@ To improve fidelity, decompile and summarize these next:
 
 ## Simulator Roadmap From This Research
 
-1. Keep V1.3's behaviour planners, but rename UI concepts clearly:
-   raw steer bearing, finite motion point, desired facing, movement model.
-2. Expand movement models:
-   - Ship/tank: forward thrust, yaw-limited turn, optional reverse.
-   - Hover/6-axis: independent translation and facing.
-   - Airplane: continuous forward speed, banked turns, turn radius.
-3. Make target profiles feed `TargetPositionInfo` equivalents every tick.
-4. Add per-card import display so users can see both selected behaviour and
-   selected manoeuvre/card-derived movement.
-5. Add "approximation badges" per feature: no pathfinding, no terrain, no PID,
+1. Add exact planner notes for aerial, bombing, charge, and frontal behaviours.
+2. Replace current approximated movement models with research-backed details
+   from `AiVehicleManoeuvreCommonVariables`, `Adjustment`, and
+   `FtdAiWrapper`.
+3. Add scenario copy/paste serialization once the scenario model has settled.
+4. Add per-feature approximation badges: no pathfinding, no terrain, no PID,
    no propulsion physics, no target-priority logic.
+5. Later, add a 3D/altitude view after the 2D target-centered lab is reliable.

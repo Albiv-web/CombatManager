@@ -1,9 +1,9 @@
 # CombatManager
 
 CombatManager is a From The Depths mod based on the working structure of
-EndlessShapes Unlimited. V1.3 adds target profiles and a standalone AI pursuit
-simulation for previewing what common combat behaviours look like around moving
-targets.
+EndlessShapes Unlimited. V1.4 focuses on AI fidelity: shared behaviour planners,
+movement-card-specific pursuit models, scenario presets, and selected-mainframe
+one-shot import.
 
 - `plugin.json` tells From The Depths which assembly to load.
 - `CombatManager.dll` contains a `GamePlugin_PostLoad` implementation and the
@@ -47,17 +47,20 @@ C:\Users\<you>\Documents\From The Depths\Mods\CombatManager
 Press `Ctrl+Shift+C` to open/close the sandbox. The hotkey is guarded against
 text input, but it no longer depends on a focused craft or build mode.
 
-The V1.3 overlay is read-only toward the real game. It shows:
+The V1.4 overlay is read-only toward the real game. It shows:
 
 - An opaque target-centered top-down X/Z tactical grid.
 - Circle, point-at, broadside, and Naval 2.0 behaviour presets.
 - Static, slow mover, ship, fast mover, and plane target profiles.
-- Simulated craft pursuit toward mirrored AI steer points.
-- Craft trail, AI steer-point trail, target future path, range labels, and
-  optional legend.
+- Scenario presets for common craft-vs-target setups.
+- Simulated craft pursuit with separate ship/tank, hover/six-axis, and airplane
+  movement-card models.
+- Raw steer bearing, finite motion point, desired facing, target future path,
+  craft trail, AI trail, range labels, and optional legend.
 - Playback controls for play, pause, step, reset, zoom, fit orbit, trail
   visibility, target path, and target/craft motion settings.
-- Optional one-shot `Import Current AI` seeding from the focused craft.
+- Optional one-shot `Import Current AI` seeding from a selected mainframe on the
+  focused craft.
 
 Imported AI settings are copied once into the sandbox. The mod does not keep
 scanning the craft, change targets, or write card/mainframe values.

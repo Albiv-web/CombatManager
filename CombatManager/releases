@@ -16,3 +16,8 @@
 - Added simulated target profiles and target path modes.
 - Added craft pursuit state with speed, acceleration, and turn-rate controls.
 - Mirrored AI steer-point planners for circle, point-at, broadside, and Naval 2.0 sandbox behaviour.
+
+0.1.4
+- Added a shared behaviour planner layer with raw steer point, finite motion point, desired facing, range, side/state, and approximation notes.
+- Split sandbox pursuit into ship/tank, hover/six-axis, and airplane movement-card models.
+- Added scenario presets, raw steer/motion-point grid toggles, and selected-mainframe one-shot import.

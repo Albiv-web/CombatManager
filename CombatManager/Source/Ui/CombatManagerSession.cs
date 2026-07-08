@@ -122,6 +122,7 @@ namespace CombatManager.Ui
             {
                 AiSimulationImporter.TryImport(GetFocusedConstruct(), _state, out string message);
                 _state.ImportStatus = message;
+                _state.ShowImportDetails = true;
             }
 
             GUILayout.FlexibleSpace();
@@ -153,7 +154,18 @@ namespace CombatManager.Ui
             GUILayout.BeginArea(rect, CombatManagerTheme.Panel);
             _inspectorScroll = GUILayout.BeginScrollView(_inspectorScroll);
 
-            GUILayout.Label("Preset", CombatManagerTheme.Header);
+            GUILayout.Label("Scenario", CombatManagerTheme.Header);
+            GUILayout.BeginHorizontal();
+            ScenarioButton("Ship circle", AiScenarioPreset.ShipCircle);
+            ScenarioButton("Hover point", AiScenarioPreset.HoverPointAt);
+            GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
+            ScenarioButton("Naval 2.0", AiScenarioPreset.NavalBroadside);
+            ScenarioButton("Plane intercept", AiScenarioPreset.PlaneIntercept);
+            GUILayout.EndHorizontal();
+
+            GUILayout.Space(8f);
+            GUILayout.Label("Behaviour", CombatManagerTheme.Header);
             GUILayout.Space(4f);
 
             GUILayout.BeginHorizontal();
@@ -169,7 +181,7 @@ namespace CombatManager.Ui
             DrawTargetControls();
 
             GUILayout.Space(8f);
-            GUILayout.Label("Movement", CombatManagerTheme.Header);
+            GUILayout.Label("Manoeuvre", CombatManagerTheme.Header);
             GUILayout.Label("Preferred side", CombatManagerTheme.Mini);
             GUILayout.BeginHorizontal();
             SideButton("Auto/Both", AiSimulationSide.Both);
@@ -195,6 +207,16 @@ namespace CombatManager.Ui
 
             GUILayout.Space(8f);
             GUILayout.Label("Craft", CombatManagerTheme.Header);
+            GUILayout.Label("Craft profile", CombatManagerTheme.Mini);
+            GUILayout.BeginHorizontal();
+            CraftProfileButton("Ship", AiCraftProfile.SurfaceShip);
+            CraftProfileButton("Hover", AiCraftProfile.Hovercraft);
+            GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
+            CraftProfileButton("Plane", AiCraftProfile.Airplane);
+            CraftProfileButton("Fast plane", AiCraftProfile.FastAircraft);
+            GUILayout.EndHorizontal();
+            GUILayout.Space(4f);
             GUILayout.Label("Movement card model", CombatManagerTheme.Mini);
             GUILayout.BeginHorizontal();
             MovementModelButton("Ship", AiCraftMovementModel.ShipOrTank);
@@ -204,6 +226,12 @@ namespace CombatManager.Ui
             _state.CraftSpeed = SliderRow("Max speed", _state.CraftSpeed, 1f, 160f, "m/s");
             _state.CraftTurnRate = SliderRow("Turn rate", _state.CraftTurnRate, 5f, 240f, "deg/s");
             _state.CraftAcceleration = SliderRow("Acceleration", _state.CraftAcceleration, 1f, 80f, "m/s2");
+            if (_state.CraftMovementModel == AiCraftMovementModel.ShipOrTank)
+                _state.ShipTarryDistance = SliderRow("Tarry distance", _state.ShipTarryDistance, 0f, 120f, "m");
+            if (_state.CraftMovementModel == AiCraftMovementModel.HoverSixAxis)
+                _state.HoverStrafeAuthority = SliderRow("Strafe authority", _state.HoverStrafeAuthority, 0.1f, 1f, "x");
+            if (_state.CraftMovementModel == AiCraftMovementModel.Airplane)
+                _state.AirplaneMinimumSpeed = SliderRow("Minimum speed", _state.AirplaneMinimumSpeed, 0f, 120f, "m/s");
             if (GUILayout.Button("Reset Craft", CombatManagerTheme.Button))
                 _state.ResetCraft();
 
@@ -217,6 +245,10 @@ namespace CombatManager.Ui
             _state.ShowDesiredTrail = ToggleButton("AI Trail", _state.ShowDesiredTrail);
             GUILayout.EndHorizontal();
             GUILayout.BeginHorizontal();
+            _state.ShowRawSteer = ToggleButton("Raw Steer", _state.ShowRawSteer);
+            _state.ShowMotionPoint = ToggleButton("Motion Point", _state.ShowMotionPoint);
+            GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
             _state.ShowTargetPath = ToggleButton("Target Path", _state.ShowTargetPath);
             _state.ShowLegend = ToggleButton("Legend", _state.ShowLegend);
             GUILayout.EndHorizontal();
@@ -226,8 +258,14 @@ namespace CombatManager.Ui
             AiSimulationFrame frame = _state.BuildFrame();
             GUILayout.Label(frame.Summary, CombatManagerTheme.BodyWrap);
             GUILayout.Label($"Range {frame.GroundRange:0.#}m | Azimuth {frame.Azimuth:0.#} deg", CombatManagerTheme.BodyWrap);
-            GUILayout.Label($"Movement model: {frame.CraftMovementModel}", CombatManagerTheme.BodyWrap);
+            GUILayout.Label($"Craft: {frame.CraftProfile} | Movement card: {frame.CraftMovementModel}", CombatManagerTheme.BodyWrap);
+            if (frame.HasRawSteerPoint && frame.HasMotionPoint)
+                GUILayout.Label($"Raw steer {PlanarMath.GroundDistance(frame.CraftPosition, frame.RawSteerPoint):0.#}m | motion point {PlanarMath.GroundDistance(frame.CraftPosition, frame.MotionPoint):0.#}m", CombatManagerTheme.BodyWrap);
+            if (frame.ReversePreferred)
+                GUILayout.Label("Movement note: reverse preferred for this intent.", CombatManagerTheme.Warning);
             GUILayout.Label($"{frame.Kind}: {frame.AiState}{(frame.Approximate ? " (approximated)" : string.Empty)}", frame.Approximate ? CombatManagerTheme.Warning : CombatManagerTheme.BodyWrap);
+            if (!string.IsNullOrWhiteSpace(frame.ApproximationNote))
+                GUILayout.Label(frame.ApproximationNote, frame.Approximate ? CombatManagerTheme.Warning : CombatManagerTheme.Mini);
             GUILayout.Label(_state.ImportStatus, CombatManagerTheme.Warning);
 
             GUILayout.Space(8f);
@@ -242,6 +280,13 @@ namespace CombatManager.Ui
             GUIStyle style = _state.Preset == preset ? CombatManagerTheme.ActiveButton : CombatManagerTheme.Button;
             if (GUILayout.Button(label, style))
                 _state.SetPreset(preset);
+        }
+
+        private void ScenarioButton(string label, AiScenarioPreset preset)
+        {
+            GUIStyle style = _state.ScenarioPreset == preset ? CombatManagerTheme.ActiveButton : CombatManagerTheme.Button;
+            if (GUILayout.Button(label, style))
+                _state.ApplyScenarioPreset(preset);
         }
 
         private void SideButton(string label, AiSimulationSide side)
@@ -314,12 +359,33 @@ namespace CombatManager.Ui
             }
         }
 
+        private void CraftProfileButton(string label, AiCraftProfile profile)
+        {
+            GUIStyle style = _state.CraftProfile == profile ? CombatManagerTheme.ActiveButton : CombatManagerTheme.Button;
+            if (GUILayout.Button(label, style))
+                _state.SetCraftProfile(profile);
+        }
+
         private void DrawImportDrawer()
         {
             GUILayout.Label("Import", CombatManagerTheme.Header);
             LabelPair("Mainframe", _state.ImportedMainframe);
             LabelPair("Behaviour", _state.ImportedBehaviour);
             LabelPair("Manoeuvre", _state.ImportedManoeuvre);
+
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("Refresh Mainframes", CombatManagerTheme.Button))
+            {
+                AiSimulationImporter.RefreshCandidates(GetFocusedConstruct(), _state);
+                _state.ShowImportDetails = true;
+            }
+            if (GUILayout.Button("Import Selected", CombatManagerTheme.Button))
+            {
+                AiSimulationImporter.TryImport(GetFocusedConstruct(), _state, _state.SelectedImportIndex, out string message);
+                _state.ImportStatus = message;
+                _state.ShowImportDetails = true;
+            }
+            GUILayout.EndHorizontal();
 
             string label = _state.ShowImportDetails ? "Hide Import Details" : "Show Import Details";
             if (GUILayout.Button(label, CombatManagerTheme.Button))
@@ -329,6 +395,24 @@ namespace CombatManager.Ui
                 return;
 
             GUILayout.Space(4f);
+            GUILayout.Label("Mainframe selector", CombatManagerTheme.Mini);
+            if (_state.ImportCandidates.Count == 0)
+            {
+                GUILayout.Label("Refresh while focused on a craft to list mainframes.", CombatManagerTheme.BodyWrap);
+            }
+            else
+            {
+                foreach (AiImportCandidate candidate in _state.ImportCandidates)
+                {
+                    GUIStyle style = _state.SelectedImportIndex == candidate.Index ? CombatManagerTheme.SelectedRow : CombatManagerTheme.Row;
+                    string prefix = candidate.Supported ? "" : "[unsupported] ";
+                    if (GUILayout.Button($"{prefix}{candidate.Index}: {candidate.MainframeName}  P{candidate.Priority}", style))
+                        _state.SelectedImportIndex = candidate.Index;
+                    GUILayout.Label($"{candidate.Summary} | move {candidate.MovementType} | fire {candidate.FiringType}", candidate.Supported ? CombatManagerTheme.Mini : CombatManagerTheme.Warning);
+                }
+            }
+
+            GUILayout.Space(6f);
             GUILayout.Label("Parameters", CombatManagerTheme.Mini);
             if (_state.ImportedParameters.Count == 0)
             {
