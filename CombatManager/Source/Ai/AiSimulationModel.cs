@@ -226,11 +226,16 @@ namespace CombatManager.Ai
         {
             Blue = new AiSimEntity(AiEntityRole.Blue, "Blue");
             Red = new AiSimEntity(AiEntityRole.Red, "Red");
+            BlueBlueprint = AiBlueprintPresetLibrary.Create(AiBlueprintPreset.CircleShip, AiEntityRole.Blue);
+            RedBlueprint = AiBlueprintPresetLibrary.Create(AiBlueprintPreset.SlowShipBroadsider, AiEntityRole.Red);
             ApplyScenarioPreset(AiScenarioPreset.ShipDuel);
         }
 
         internal AiSimEntity Blue { get; }
         internal AiSimEntity Red { get; }
+        internal AiMainframeBlueprint BlueBlueprint { get; private set; }
+        internal AiMainframeBlueprint RedBlueprint { get; private set; }
+        internal AiBlueprintExportPlan BlueExportPlan { get; set; }
         internal AiScenarioPreset ScenarioPreset { get; private set; } = AiScenarioPreset.ShipDuel;
 
         internal float PlaybackSpeed { get; set; } = 1f;
@@ -414,7 +419,43 @@ namespace CombatManager.Ai
                     break;
             }
 
+            BlueBlueprint = new AiMainframeBlueprint { MainframeName = $"Blue {ScenarioPresetName(preset)}" };
+            RedBlueprint = new AiMainframeBlueprint { MainframeName = $"Red {ScenarioPresetName(preset)}" };
+            CaptureBlueprintFromEntity(Blue);
+            CaptureBlueprintFromEntity(Red);
             ResetScenario();
+        }
+
+        internal void ApplyBlueprintPreset(AiEntityRole role, AiBlueprintPreset preset)
+        {
+            ApplyBlueprint(role, AiBlueprintPresetLibrary.Create(preset, role), reset: true);
+        }
+
+        internal void ApplyBlueprint(AiEntityRole role, AiMainframeBlueprint blueprint, bool reset)
+        {
+            if (role == AiEntityRole.Blue)
+            {
+                BlueBlueprint = blueprint.Clone();
+                BlueBlueprint.ApplyToEntity(Blue);
+            }
+            else
+            {
+                RedBlueprint = blueprint.Clone();
+                RedBlueprint.ApplyToEntity(Red);
+            }
+
+            if (reset)
+                ResetScenario();
+        }
+
+        internal AiMainframeBlueprint BlueprintFor(AiEntityRole role)
+        {
+            return role == AiEntityRole.Blue ? BlueBlueprint : RedBlueprint;
+        }
+
+        internal void CaptureBlueprintFromEntity(AiSimEntity entity)
+        {
+            BlueprintFor(entity.Role).CaptureEntityFields(entity);
         }
 
         internal AiDuelFrame BuildDuelFrame()

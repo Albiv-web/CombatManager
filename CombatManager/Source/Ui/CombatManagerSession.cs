@@ -247,6 +247,30 @@ namespace CombatManager.Ui
 
         private void DrawEntityMainframeControls(AiSimEntity entity)
         {
+            AiMainframeBlueprint blueprint = _state.BlueprintFor(entity.Role);
+            GUILayout.Label("Blueprint", CombatManagerTheme.Header);
+            if (DrawBlueprintPresetButtons(entity.Role))
+                return;
+
+            GUILayout.Space(6f);
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Name", CombatManagerTheme.Body, GUILayout.Width(80f));
+            blueprint.MainframeName = GUILayout.TextField(blueprint.MainframeName ?? string.Empty, GUILayout.MinWidth(120f));
+            GUILayout.EndHorizontal();
+            blueprint.Priority = Mathf.RoundToInt(SliderRow("Priority", blueprint.Priority, -500f, 500f, string.Empty));
+
+            GUILayout.Label("Mainframe mode", CombatManagerTheme.Mini);
+            GUILayout.BeginHorizontal();
+            blueprint.MovementMode = StringOptionButton("Automatic", blueprint.MovementMode, "Automatic");
+            blueprint.MovementMode = StringOptionButton("Off", blueprint.MovementMode, "Off");
+            blueprint.MovementMode = StringOptionButton("Fleet", blueprint.MovementMode, "Fleet");
+            GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
+            blueprint.FiringMode = StringOptionButton("Firing On", blueprint.FiringMode, "On");
+            blueprint.FiringMode = StringOptionButton("Firing Off", blueprint.FiringMode, "Off");
+            GUILayout.EndHorizontal();
+
+            GUILayout.Space(8f);
             GUILayout.Label("AI Card", CombatManagerTheme.Header);
             GUILayout.Label($"{AiSimulationState.PresetName(entity.Preset)} | {AiSimulationState.CraftProfileName(entity.CraftProfile)} | {AiSimulationState.CraftMovementModelName(entity.CraftMovementModel)}", CombatManagerTheme.BodyWrap);
 
@@ -281,10 +305,13 @@ namespace CombatManager.Ui
                 entity.BroadsideAngle = SliderRow("Broadside", entity.BroadsideAngle, 10f, 170f, "deg");
             if (entity.Preset == AiSimulationPreset.NavalBroadside)
                 entity.BroadsideOuterRadius = SliderRow("Leave range", entity.BroadsideOuterRadius, entity.Radius + 20f, 2500f, "m");
+
+            _state.CaptureBlueprintFromEntity(entity);
         }
 
         private void DrawEntityMovementControls(AiSimEntity entity)
         {
+            AiMainframeBlueprint blueprint = _state.BlueprintFor(entity.Role);
             GUILayout.Label("Movement", CombatManagerTheme.Header);
 
             GUILayout.Label("Craft profile", CombatManagerTheme.Mini);
@@ -339,10 +366,15 @@ namespace CombatManager.Ui
             GUILayout.Space(8f);
             if (GUILayout.Button("Reset Scenario", CombatManagerTheme.Button))
                 _state.ResetScenario();
+
+            GUILayout.Space(8f);
+            DrawAdjustmentControls(blueprint);
+            _state.CaptureBlueprintFromEntity(entity);
         }
 
-        private static void DrawEntityStatus(AiSimulationFrame frame, string header)
+        private void DrawEntityStatus(AiSimulationFrame frame, string header)
         {
+            AiMainframeBlueprint blueprint = _state.BlueprintFor(frame.Role);
             GUILayout.Label(header, CombatManagerTheme.Header);
             GUILayout.Label($"{frame.Kind} | {frame.AiState}", CombatManagerTheme.BodyWrap);
             GUILayout.Label($"Range {frame.GroundRange:0.#}m", CombatManagerTheme.BodyWrap);
@@ -350,10 +382,62 @@ namespace CombatManager.Ui
             GUILayout.Label($"{frame.CraftMovementModel} | speed {frame.CraftVelocity.magnitude:0.#}m/s", CombatManagerTheme.BodyWrap);
 
             GUILayout.Space(8f);
+            GUILayout.Label("Blueprint mapping", CombatManagerTheme.Header);
+            GUILayout.Label($"Mainframe: {blueprint.MainframeName}", CombatManagerTheme.BodyWrap);
+            GUILayout.Label($"Behaviour: {blueprint.BehaviourClassName() ?? "unsupported / preview-only"}", CombatManagerTheme.BodyWrap);
+            GUILayout.Label($"Manoeuvre: {blueprint.ManoeuvreClassName() ?? "unsupported"}", CombatManagerTheme.BodyWrap);
+            GUILayout.Label($"Adjustments: {blueprint.AdjustmentVehicleType}, {blueprint.AltitudeReference}", CombatManagerTheme.BodyWrap);
+            foreach (string warning in blueprint.Warnings)
+                GUILayout.Label(warning, CombatManagerTheme.Warning);
+
+            GUILayout.Space(8f);
             GUILayout.Label("Approximation", CombatManagerTheme.Header);
             GUILayout.Label("Read-only simulation. Behaviour intent is mirrored from researched AI cards; movement-card output approximates FTD physics, PID, propulsion, pathfinding, terrain, water, and firing-angle internals.", CombatManagerTheme.Warning);
             if (!string.IsNullOrWhiteSpace(frame.ApproximationNote))
                 GUILayout.Label(frame.ApproximationNote, CombatManagerTheme.BodyWrap);
+        }
+
+        private bool DrawBlueprintPresetButtons(AiEntityRole role)
+        {
+            GUILayout.Label("Presets", CombatManagerTheme.Mini);
+            GUILayout.BeginHorizontal();
+            for (int i = 0; i < AiBlueprintPresetLibrary.All.Length; i++)
+            {
+                AiBlueprintPreset preset = AiBlueprintPresetLibrary.All[i];
+                if (i > 0 && i % 2 == 0)
+                {
+                    GUILayout.EndHorizontal();
+                    GUILayout.BeginHorizontal();
+                }
+
+                if (GUILayout.Button(AiBlueprintPresetLibrary.Name(preset), CombatManagerTheme.Button))
+                {
+                    _state.ApplyBlueprintPreset(role, preset);
+                    return true;
+                }
+            }
+
+            GUILayout.EndHorizontal();
+            return false;
+        }
+
+        private static void DrawAdjustmentControls(AiMainframeBlueprint blueprint)
+        {
+            GUILayout.Label("Adjustments draft", CombatManagerTheme.Header);
+            GUILayout.BeginHorizontal();
+            blueprint.AltitudeReference = AltitudeButton("On water", blueprint.AltitudeReference, AiBlueprintAltitudeReference.OnWater);
+            blueprint.AltitudeReference = AltitudeButton("On land", blueprint.AltitudeReference, AiBlueprintAltitudeReference.OnLand);
+            GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
+            blueprint.AltitudeReference = AltitudeButton("Above", blueprint.AltitudeReference, AiBlueprintAltitudeReference.Above);
+            blueprint.AltitudeReference = AltitudeButton("Ignore", blueprint.AltitudeReference, AiBlueprintAltitudeReference.Ignore);
+            GUILayout.EndHorizontal();
+            blueprint.MinimumAltitudeAboveLand = SliderRow("Min land", blueprint.MinimumAltitudeAboveLand, 0f, 1000f, "m");
+            blueprint.MinimumAltitudeAboveWater = SliderRow("Min water", blueprint.MinimumAltitudeAboveWater, 0f, 1000f, "m");
+            blueprint.MaximumAltitude = SliderRow("Max alt", blueprint.MaximumAltitude, 0f, 3000f, "m");
+            blueprint.WaterDepthRequired = SliderRow("Water depth", blueprint.WaterDepthRequired, 0f, 300f, "m");
+            blueprint.LandHeightRequired = SliderRow("Land height", blueprint.LandHeightRequired, 0f, 300f, "m");
+            blueprint.TurningCircle = SliderRow("Turn circle", blueprint.TurningCircle, 0f, 2000f, "m");
         }
 
         private void ScenarioButton(string label, AiScenarioPreset preset, params GUILayoutOption[] options)
@@ -406,7 +490,7 @@ namespace CombatManager.Ui
         private void DrawImportDrawer()
         {
             GUILayout.Label("Import Blue AI", CombatManagerTheme.Header);
-            GUILayout.Label("Import seeds Blue only. Red remains manually configured.", CombatManagerTheme.BodyWrap);
+            GUILayout.Label("Import seeds the Blue blueprint only. Red remains manually configured.", CombatManagerTheme.BodyWrap);
             LabelPair("Mainframe", _state.ImportedMainframe);
             LabelPair("Behaviour", _state.ImportedBehaviour);
             LabelPair("Move", _state.ImportedManoeuvre);
@@ -431,6 +515,14 @@ namespace CombatManager.Ui
                 _state.ShowImportDetails = !_state.ShowImportDetails;
 
             GUILayout.Label(_state.ImportStatus, CombatManagerTheme.Warning);
+
+            GUILayout.Space(8f);
+            GUILayout.Label("Export Preview", CombatManagerTheme.Header);
+            GUILayout.Label("Dry-run only. This does not modify the focused craft.", CombatManagerTheme.BodyWrap);
+            if (GUILayout.Button("Build Export Preview", CombatManagerTheme.Button))
+                _state.BlueExportPlan = AiBlueprintExportPlanner.Build(GetFocusedConstruct(), _state.BlueBlueprint, _state.SelectedImportIndex);
+            DrawExportPreview(_state.BlueExportPlan);
+
             if (!_state.ShowImportDetails)
                 return;
 
@@ -477,6 +569,27 @@ namespace CombatManager.Ui
             }
         }
 
+        private static void DrawExportPreview(AiBlueprintExportPlan plan)
+        {
+            if (plan == null)
+            {
+                GUILayout.Label("No export preview built yet.", CombatManagerTheme.Mini);
+                return;
+            }
+
+            GUILayout.Label($"Target: {plan.TargetMainframeName}", CombatManagerTheme.BodyWrap);
+            GUILayout.Label(plan.RoutineCapacity, CombatManagerTheme.BodyWrap);
+            GUILayout.Label(plan.Supported ? "Supported mapping: yes" : "Supported mapping: no", plan.Supported ? CombatManagerTheme.BodyWrap : CombatManagerTheme.Warning);
+            GUILayout.Space(4f);
+            GUILayout.Label("Would write", CombatManagerTheme.Mini);
+            foreach (string mutation in plan.Mutations)
+                GUILayout.Label(mutation, CombatManagerTheme.BodyWrap);
+            GUILayout.Space(4f);
+            GUILayout.Label("Warnings", CombatManagerTheme.Mini);
+            foreach (string warning in plan.Warnings)
+                GUILayout.Label(warning, CombatManagerTheme.Warning);
+        }
+
         private static float SliderRow(string label, float value, float min, float max, string suffix)
         {
             GUILayout.BeginHorizontal(GUILayout.Height(30f));
@@ -491,6 +604,18 @@ namespace CombatManager.Ui
         {
             GUIStyle style = value ? CombatManagerTheme.ActiveButton : CombatManagerTheme.Button;
             return GUILayout.Button(label, style, options) ? !value : value;
+        }
+
+        private static string StringOptionButton(string label, string current, string option)
+        {
+            GUIStyle style = current == option ? CombatManagerTheme.ActiveButton : CombatManagerTheme.Button;
+            return GUILayout.Button(label, style) ? option : current;
+        }
+
+        private static AiBlueprintAltitudeReference AltitudeButton(string label, AiBlueprintAltitudeReference current, AiBlueprintAltitudeReference option)
+        {
+            GUIStyle style = current == option ? CombatManagerTheme.ActiveButton : CombatManagerTheme.Button;
+            return GUILayout.Button(label, style) ? option : current;
         }
 
         private static void DrawFullscreenBackdrop(Rect rect)

@@ -178,48 +178,54 @@ namespace CombatManager.Ai
             state.ImportedMainframe = mainframe.Node.Name;
             state.ImportedBehaviour = behaviour.GetType().Name;
             state.ImportedManoeuvre = manoeuvre?.GetType().Name;
-            AiSimEntity blue = state.Blue;
             state.ImportedParameters.Add($"mainframe priority {mainframe.Node.Master.Priority}");
             state.ImportedParameters.Add($"movement mode {mainframe.Node.Master.MovementType}");
             state.ImportedParameters.Add($"firing mode {mainframe.Node.Master.FiringType}");
-            ApplyManoeuvre(manoeuvre, state);
+            AiMainframeBlueprint blueprint = state.BlueBlueprint.Clone();
+            blueprint.MainframeName = mainframe.Node.Name;
+            blueprint.Priority = mainframe.Node.Master.Priority;
+            blueprint.MovementMode = mainframe.Node.Master.MovementType.ToString();
+            blueprint.FiringMode = mainframe.Node.Master.FiringType.ToString();
+            blueprint.PreviewOnly = false;
+            blueprint.Warnings.Clear();
+            ApplyManoeuvre(manoeuvre, blueprint, state.ImportedParameters);
 
             if (behaviour is BehaviourCircleAtDistance circle)
             {
-                blue.Preset = AiSimulationPreset.Circle;
-                blue.Radius = Mathf.Max(10f, circle.DistanceToMaintain.Us);
-                blue.CircleMinApproachAngle = circle.MinApproachAngle.Us;
-                blue.Side = MapSide(circle.PreferredSide.Us);
+                blueprint.Behaviour = AiSimulationPreset.Circle;
+                blueprint.Radius = Mathf.Max(10f, circle.DistanceToMaintain.Us);
+                blueprint.CircleMinApproachAngle = circle.MinApproachAngle.Us;
+                blueprint.Side = MapSide(circle.PreferredSide.Us);
                 state.ImportedParameters.Add($"distance {circle.DistanceToMaintain.Us:0.#}m");
                 state.ImportedParameters.Add($"side {circle.PreferredSide.Us}");
                 state.ImportedParameters.Add($"minimum approach {circle.MinApproachAngle.Us:0.#} deg");
             }
             else if (behaviour is BehaviourPointAndMaintainDistance pointAt)
             {
-                blue.Preset = AiSimulationPreset.PointAt;
-                blue.Radius = Mathf.Max(10f, pointAt.DistanceToMaintain.Us);
+                blueprint.Behaviour = AiSimulationPreset.PointAt;
+                blueprint.Radius = Mathf.Max(10f, pointAt.DistanceToMaintain.Us);
                 state.ImportedParameters.Add($"distance {pointAt.DistanceToMaintain.Us:0.#}m");
                 state.ImportedParameters.Add($"altitude {pointAt.AltitudeType.Us} {pointAt.PreferredAltitude.Us:0.#}m");
             }
             else if (behaviour is FtdNaval naval)
             {
-                blue.Preset = AiSimulationPreset.NavalBroadside;
-                blue.Radius = Mathf.Max(
+                blueprint.Behaviour = AiSimulationPreset.NavalBroadside;
+                blueprint.Radius = Mathf.Max(
                     10f,
                     Mathf.Max(naval.MinimumBroadsideDistanceToMaintain.Us, naval.BroadsideDistance.Lower));
-                blue.BroadsideOuterRadius = Mathf.Max(blue.Radius + 20f, naval.BroadsideDistance.Upper);
-                blue.BroadsideAngle = Mathf.Abs(naval.NominalBroadsideAngle.Us);
-                blue.Side = AiSimulationSide.Both;
+                blueprint.BroadsideOuterRadius = Mathf.Max(blueprint.Radius + 20f, naval.BroadsideDistance.Upper);
+                blueprint.BroadsideAngle = Mathf.Abs(naval.NominalBroadsideAngle.Us);
+                blueprint.Side = AiSimulationSide.Both;
                 state.ImportedParameters.Add($"enter broadside <= {naval.BroadsideDistance.Lower:0.#}m");
                 state.ImportedParameters.Add($"leave broadside >= {naval.BroadsideDistance.Upper:0.#}m");
                 state.ImportedParameters.Add($"nominal angle {naval.NominalBroadsideAngle.Us:0.#} deg");
             }
             else if (behaviour is BehaviourBroadside broadside)
             {
-                blue.Preset = AiSimulationPreset.Broadside;
-                blue.Radius = Mathf.Max(10f, (broadside.DistanceToMaintain.Lower + broadside.DistanceToMaintain.Upper) * 0.5f);
-                blue.BroadsideAngle = Mathf.Abs(broadside.AngleToMaintain.Us);
-                blue.Side = broadside.AngleToMaintain.Us < 0f ? AiSimulationSide.Right : AiSimulationSide.Left;
+                blueprint.Behaviour = AiSimulationPreset.Broadside;
+                blueprint.Radius = Mathf.Max(10f, (broadside.DistanceToMaintain.Lower + broadside.DistanceToMaintain.Upper) * 0.5f);
+                blueprint.BroadsideAngle = Mathf.Abs(broadside.AngleToMaintain.Us);
+                blueprint.Side = broadside.AngleToMaintain.Us < 0f ? AiSimulationSide.Right : AiSimulationSide.Left;
                 state.ImportedParameters.Add($"angle {broadside.AngleToMaintain.Us:0.#} deg");
                 state.ImportedParameters.Add($"distance {broadside.DistanceToMaintain.Lower:0.#}-{broadside.DistanceToMaintain.Upper:0.#}m");
             }
@@ -229,6 +235,7 @@ namespace CombatManager.Ai
                 return false;
             }
 
+            state.ApplyBlueprint(AiEntityRole.Blue, blueprint, reset: false);
             ImportRequests(mainframe, state);
             state.ImportStatus = $"Imported once from {state.ImportedMainframe}: {state.ImportedBehaviour}.";
             state.Reset();
@@ -249,7 +256,7 @@ namespace CombatManager.Ai
             }
         }
 
-        private static void ApplyManoeuvre(object manoeuvre, AiSimulationState state)
+        private static void ApplyManoeuvre(object manoeuvre, AiMainframeBlueprint blueprint, List<string> importedParameters)
         {
             if (manoeuvre == null)
                 return;
@@ -258,28 +265,32 @@ namespace CombatManager.Ai
             {
                 if (manoeuvre is ManoeuvreSixAxis)
                 {
-                    state.Blue.ApplyCraftProfile(AiCraftProfile.SixAxisDrone);
-                    state.ImportedParameters.Add($"movement {manoeuvre.GetType().Name} -> six-axis pursuit");
+                    blueprint.CraftProfile = AiCraftProfile.SixAxisDrone;
+                    blueprint.Manoeuvre = AiCraftMovementModel.SixAxis;
+                    importedParameters.Add($"movement {manoeuvre.GetType().Name} -> six-axis pursuit");
                 }
                 else
                 {
-                    state.Blue.ApplyCraftProfile(AiCraftProfile.Hovercraft);
-                    state.ImportedParameters.Add($"movement {manoeuvre.GetType().Name} -> hover pursuit");
+                    blueprint.CraftProfile = AiCraftProfile.Hovercraft;
+                    blueprint.Manoeuvre = AiCraftMovementModel.Hover;
+                    importedParameters.Add($"movement {manoeuvre.GetType().Name} -> hover pursuit");
                 }
             }
             else if (manoeuvre is ManoeuvreAirplane || manoeuvre is FtdAerialMovement)
             {
-                state.Blue.ApplyCraftProfile(AiCraftProfile.Airplane);
-                state.ImportedParameters.Add($"movement {manoeuvre.GetType().Name} -> airplane pursuit");
+                blueprint.CraftProfile = AiCraftProfile.Airplane;
+                blueprint.Manoeuvre = AiCraftMovementModel.Airplane;
+                importedParameters.Add($"movement {manoeuvre.GetType().Name} -> airplane pursuit");
             }
             else if (manoeuvre is FtdNavalAndLandManoeuvre)
             {
-                state.Blue.ApplyCraftProfile(AiCraftProfile.SurfaceShip);
-                state.ImportedParameters.Add($"movement {manoeuvre.GetType().Name} -> ship/tank pursuit");
+                blueprint.CraftProfile = AiCraftProfile.SurfaceShip;
+                blueprint.Manoeuvre = AiCraftMovementModel.ShipOrTank;
+                importedParameters.Add($"movement {manoeuvre.GetType().Name} -> ship/tank pursuit");
             }
             else
             {
-                state.ImportedParameters.Add($"movement {manoeuvre.GetType().Name} not mirrored; keeping {state.CraftMovementModelName()}");
+                importedParameters.Add($"movement {manoeuvre.GetType().Name} not mirrored; keeping {AiSimulationState.CraftMovementModelName(blueprint.Manoeuvre)}");
             }
         }
 

@@ -31,6 +31,11 @@ namespace CombatManager.Verification
                 FullscreenLayoutAssignsSeparateColumns();
                 FullscreenLayoutKeepsTabContentInsidePanels();
                 FullscreenToolbarGroupsDoNotOverlap();
+                BlueprintPresetValuesAreStable();
+                BlueprintSyncsToSandboxEntities();
+                BlueprintExportPreviewHandlesNoFocusedCraft();
+                BlueprintExportPreviewClassifiesUnsupportedPresets();
+                BlueprintCaptureDoesNotChangePlannerFrame();
                 Console.WriteLine("CombatManager verification passed.");
                 return 0;
             }
@@ -280,6 +285,73 @@ namespace CombatManager.Verification
             AssertRectInside(layout.Toolbar, layout.ToolbarRight, "toolbar right");
             if (!(layout.ToolbarLeft.xMax < layout.ToolbarMiddle.x && layout.ToolbarMiddle.xMax < layout.ToolbarRight.x))
                 throw new InvalidOperationException("toolbar groups overlap or are out of order");
+        }
+
+        private static void BlueprintPresetValuesAreStable()
+        {
+            foreach (AiBlueprintPreset preset in AiBlueprintPresetLibrary.All)
+            {
+                AiMainframeBlueprint blueprint = AiBlueprintPresetLibrary.Create(preset, AiEntityRole.Blue);
+                if (string.IsNullOrWhiteSpace(blueprint.MainframeName))
+                    throw new InvalidOperationException($"preset {preset} did not create a name");
+            }
+
+            AiMainframeBlueprint broadsider = AiBlueprintPresetLibrary.Create(AiBlueprintPreset.SlowShipBroadsider, AiEntityRole.Blue);
+            if (broadsider.Behaviour != AiSimulationPreset.NavalBroadside || broadsider.Manoeuvre != AiCraftMovementModel.ShipOrTank)
+                throw new InvalidOperationException("slow ship broadsider did not map to Naval 2.0 ship/tank");
+            AssertNear(2500f, broadsider.Radius, "broadsider range");
+
+            AiMainframeBlueprint hover = AiBlueprintPresetLibrary.Create(AiBlueprintPreset.HoverSniper, AiEntityRole.Red);
+            if (hover.Behaviour != AiSimulationPreset.PointAt || hover.Manoeuvre != AiCraftMovementModel.SixAxis)
+                throw new InvalidOperationException("hover sniper did not map to point-at six-axis");
+            AssertNear(3000f, hover.Radius, "hover sniper range");
+        }
+
+        private static void BlueprintSyncsToSandboxEntities()
+        {
+            var state = new AiSimulationState();
+            state.ApplyBlueprintPreset(AiEntityRole.Blue, AiBlueprintPreset.HoverSniper);
+            if (state.Blue.Preset != AiSimulationPreset.PointAt || state.Blue.CraftMovementModel != AiCraftMovementModel.SixAxis)
+                throw new InvalidOperationException("blue hover sniper did not sync to sandbox entity");
+            AssertNear(3000f, state.Blue.Radius, "blue blueprint radius");
+
+            state.ApplyBlueprintPreset(AiEntityRole.Red, AiBlueprintPreset.FastPlanePointAt);
+            if (state.Red.Preset != AiSimulationPreset.PointAt || state.Red.CraftMovementModel != AiCraftMovementModel.Airplane)
+                throw new InvalidOperationException("red fast plane did not sync to sandbox entity");
+            AssertNear(state.Red.Radius, state.RedBlueprint.Radius, "red entity and blueprint radius");
+        }
+
+        private static void BlueprintExportPreviewHandlesNoFocusedCraft()
+        {
+            var state = new AiSimulationState();
+            AiBlueprintExportPlan plan = AiBlueprintExportPlanner.Build(null, state.BlueBlueprint, -1);
+            if (plan.HasFocusedCraft || plan.HasSelectedMainframe)
+                throw new InvalidOperationException("no-craft export preview reported a selected craft/mainframe");
+            if (!plan.Supported)
+                throw new InvalidOperationException("default blueprint should be supported for future export");
+            if (plan.Mutations.Count == 0 || plan.Warnings.Count == 0)
+                throw new InvalidOperationException("export preview did not describe mutations and warnings");
+        }
+
+        private static void BlueprintExportPreviewClassifiesUnsupportedPresets()
+        {
+            AiMainframeBlueprint rammer = AiBlueprintPresetLibrary.Create(AiBlueprintPreset.CloseRangeRammer, AiEntityRole.Blue);
+            AiBlueprintExportPlan plan = AiBlueprintExportPlanner.Build(null, rammer, -1);
+            if (plan.Supported)
+                throw new InvalidOperationException("close-range rammer should be preview-only until Ram is mapped");
+        }
+
+        private static void BlueprintCaptureDoesNotChangePlannerFrame()
+        {
+            var state = new AiSimulationState();
+            AiDuelFrame before = state.BuildDuelFrame();
+            state.CaptureBlueprintFromEntity(state.Blue);
+            state.CaptureBlueprintFromEntity(state.Red);
+            AiDuelFrame after = state.BuildDuelFrame();
+            AssertNear(before.Blue.GroundRange, after.Blue.GroundRange, "blue range after blueprint capture");
+            AssertNear(before.Red.GroundRange, after.Red.GroundRange, "red range after blueprint capture");
+            AssertNear(before.Blue.MotionPoint.x, after.Blue.MotionPoint.x, "blue motion point x after blueprint capture");
+            AssertNear(before.Blue.MotionPoint.z, after.Blue.MotionPoint.z, "blue motion point z after blueprint capture");
         }
 
         private static void ConfigureSymmetricPointAt(AiSimEntity entity)

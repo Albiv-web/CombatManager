@@ -40,3 +40,9 @@
 - Increased panel width, text size, button height, and slider label/value spacing.
 - Simplified the toolbar into grouped scenario, playback, and view controls.
 - Added opaque graph label backplates and reduced default graph text clutter.
+
+0.1.8
+- Added editable AI blueprints for draft mainframe, behaviour, manoeuvre, and adjustment setup.
+- Added preset blueprints for broadsiders, point-at planes, hover snipers, circle ships, interceptors, and preview-only rammers.
+- Routed presets, Blue import, Blue/Red simulation state, and future export through the same blueprint shape.
+- Added a non-mutating Blue export preview that lists planned vanilla AI/card/mainframe changes and unsupported fields.

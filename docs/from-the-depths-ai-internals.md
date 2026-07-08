@@ -122,6 +122,52 @@ mainframe's `AiMasterPack`.
 GPP cards are separate. `AiGPPCard` adds processing power for detection systems;
 it is not the same as behaviour routine capacity.
 
+## Blueprint Writer Map
+
+V1.8 adds CombatManager blueprints as the draft shape for a later guarded
+writer. The important vanilla mapping is:
+
+- Mainframe/basic settings:
+  - `AiMasterPack.Movement`: default `Automatic`
+  - `AiMasterPack.Firing`: default `On`
+  - `AiMasterPack.Priority`: default `0`, vanilla UI range `-500..500`
+  - selected behaviour/manoeuvre are stored as `SelectedBehaviourId` and
+    `SelectedManoeuvreId`
+- Routine capacity:
+  - `RoutineAvailability.Available` is increased by connected AI card slots.
+  - `RoutineAvailability.Used` counts non-manoeuvre routines, so behaviour and
+    additional routines consume capacity while manoeuvres do not.
+  - `AiMasterPack.RemovePackage()` clears selected IDs when a selected routine
+    is removed and decrements capacity usage for non-manoeuvres.
+  - `AiMasterPack.Load()` recomputes used capacity by counting packages whose
+    routine type is not manoeuvre.
+- Creating/selecting:
+  - `AiMasterPack.NewPackage()` creates a package and immediately calls
+    `Setup(platform, Common)`.
+  - `MakeSystem(Guid)` searches `AiBehaviour`, `AiManoeuvre`, then
+    `AiAdditional` attributes and constructs the matching routine class.
+  - Future writes should create or reuse the desired routine, set its scalar
+    fields, then update the selected behaviour/manoeuvre IDs.
+
+Supported V1.8 blueprint classes:
+
+| Blueprint field | Vanilla class |
+| --- | --- |
+| Circle behaviour | `BehaviourCircleAtDistance` |
+| Point At behaviour | `BehaviourPointAndMaintainDistance` |
+| Broadside 1.0 behaviour | `BehaviourBroadside` |
+| Broadside 2.0 / Naval behaviour | `FtdNaval` |
+| Ship/Tank manoeuvre | `FtdNavalAndLandManoeuvre` |
+| Hover manoeuvre | `ManoeuvreHover` |
+| Six-axis manoeuvre | `ManoeuvreSixAxis` |
+| Airplane manoeuvre | `ManoeuvreAirplane` |
+
+The V1.8 export preview is deliberately dry-run only. It reports the selected
+focused mainframe, routine capacity, routine classes that would be created or
+selected, scalar fields that would be set, adjustment defaults, and unsupported
+fields. It does not modify mainframe names, card slots, packages, selected IDs,
+routine values, or real craft AI state.
+
 ## Common Card Mapping
 
 Observed card-to-routine mapping:
@@ -142,6 +188,17 @@ Observed card-to-routine mapping:
 This means the phrase "ship card" is not enough for simulation. CombatManager
 must read the selected manoeuvre or movement card result, not infer movement
 from the card's display name.
+
+Focused card defaults observed so far:
+
+| Source | Defaults relevant to CombatManager |
+| --- | --- |
+| `AICirclingShipCard` | Circle + hover movement, altitude ignored, preferred altitude `0`, adjustment `OnWater`, terrain prediction `10s`, water depth `10m`, min land/water `0m`, max altitude `0m` |
+| `AICirclingTankCard` | Circle + hover movement, altitude ignored, preferred altitude `0`, adjustment `OnLand`, terrain prediction `10s`, land height `5m`, min land/water `0m`, max altitude `0m` |
+| `AICirclingHoverCard` | Circle + hover movement, preferred altitude `200m`, adjustment `Above`, terrain prediction `10s` |
+| `AICirclingPlaneCard` | Circle + airplane movement, preferred altitude `200m`, adjustment `Above`, terrain prediction `10s`, airplane pitch-for-altitude `15deg` |
+| `AIFrontalHoverCard` | Point At + hover movement, preferred altitude `200m`, adjustment `Above`, terrain prediction `10s` |
+| `AINavalMovementCard` | Deprecated migration installs `FtdNaval` + `FtdNavalAndLandManoeuvre`, adjustment `OnWater`, min land/water `0m`, max altitude `0m` |
 
 ## Target Data
 
@@ -511,6 +568,30 @@ V1.7 is a readability milestone on top of the same simulation model:
 - Text, buttons, sliders, and graph labels are larger, and graph labels use
   opaque backplates to remain readable over the tactical grid.
 - No planner or manoeuvre simulation behaviour changed.
+
+V1.8 adds an AI blueprint layer without adding writes:
+
+- `AiMainframeBlueprint` is the shared draft format for Blue and Red. It stores
+  mainframe fields, behaviour, manoeuvre, movement model knobs, adjustment
+  defaults, and approximation warnings.
+- Presets now create blueprints first, then sync the sandbox entity from that
+  blueprint. Manual Blue/Red edits also capture back into the blueprint.
+- `Import Blue AI` seeds the Blue blueprint once from the selected focused
+  mainframe, then syncs the sandbox. It still does not continue scanning.
+- The Blue import tab can build an `AiBlueprintExportPlan`. The plan is a
+  dry-run list of future vanilla mutations plus warnings and routine-capacity
+  status; it performs no package/card/mainframe changes.
+- Built-in draft presets cover:
+  - slow 2500m Naval 2.0 ship broadsider
+  - fast airplane point-at
+  - 3000m hover/six-axis sniper
+  - circle ship
+  - fast aircraft interceptor
+  - close-range rammer preview, labelled unsupported until `BehaviourRam` is
+    researched and mapped
+- Known V1.8 writer gaps: no card-block creation/removal, no routine
+  replacement prompt, no PID/common-variable writes, no additional routines,
+  no breadboard writes, and no actual apply button.
 
 ## Next Research Targets
 

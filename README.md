@@ -1,10 +1,12 @@
 # CombatManager
 
 CombatManager is a From The Depths mod based on the working structure of
-EndlessShapes Unlimited. V1.7 presents the symmetric Blue-vs-Red duel sandbox
-as a more readable fullscreen editor: Blue/player controls are tabbed on the
-left, Red/enemy controls are tabbed on the right, and the Red-centered tactical
-graph fills the middle.
+EndlessShapes Unlimited. V1.8 presents a symmetric Blue-vs-Red AI duel sandbox
+with editable AI blueprints: Blue/player controls are tabbed on the left,
+Red/enemy controls are tabbed on the right, and the Red-centered tactical graph
+fills the middle. Blueprints mirror the vanilla mainframe, behaviour,
+manoeuvre, and adjustment setup so presets, import, simulation, and the future
+write-to-craft flow all share one data shape.
 
 - `plugin.json` tells From The Depths which assembly to load.
 - `CombatManager.dll` contains a `GamePlugin_PostLoad` implementation and the
@@ -48,7 +50,7 @@ C:\Users\<you>\Documents\From The Depths\Mods\CombatManager
 Press `Ctrl+Shift+C` to open/close the sandbox. The hotkey is guarded against
 text input, but it no longer depends on a focused craft or build mode.
 
-The V1.7 editor is read-only toward the real game. It shows:
+The V1.8 editor is read-only toward the real game. It shows:
 
 - An opaque fullscreen Red-centered top-down X/Z tactical grid.
 - Tabbed Blue/player and Red/enemy panels with independent scrolling.
@@ -62,6 +64,10 @@ The V1.7 editor is read-only toward the real game. It shows:
 - Larger, clearer HUD text and graph labels with opaque backplates.
 - Optional one-shot `Import Blue AI` seeding from a selected mainframe on the
   focused craft. Red remains manually configured.
+- Preset AI blueprints for slow ship broadsiders, fast point-at planes, hover
+  snipers, circle ships, aircraft interceptors, and preview-only close rammers.
+- A Blue export preview that lists the vanilla mainframe/card mutations a later
+  guarded writer would apply, while explicitly performing no real writes.
 
 Imported AI settings are copied once into Blue. The mod does not keep scanning
 the craft, change targets, or write card/mainframe values.
