@@ -2,8 +2,8 @@
 
 CombatManager adds a standalone AI movement sandbox for From The Depths.
 
-Open it with `Ctrl+Shift+C`. The fullscreen editor shows an opaque Red-centered
-2D tactical grid between tabbed Blue/player controls on the left and tabbed
+Open it with `Ctrl+Shift+C`. The fullscreen editor shows an opaque tactical
+2D grid between tabbed Blue/player controls on the left and tabbed
 Red/enemy controls on the right. Both sides have mainframe-like behaviour and
 manoeuvre settings, plan against each other from the same tick snapshot, then
 move using shared ship/tank, hover, six-axis, or airplane movement-card request
@@ -14,4 +14,8 @@ mainframe on the focused craft once, the Blue export preview shows future
 vanilla mutations without writing, and Live Parity can read the focused craft's
 actual AI requests for a read-only observed-vs-predicted comparison.
 
-Version: 0.2.0
+V2.1 adds Red/Blue/Free graph camera modes, mouse-wheel zoom, Freecam drag-pan,
+fixed-size markers/text while zooming, and Clean/Tactical/Debug graph detail
+modes.
+
+Version: 0.2.1

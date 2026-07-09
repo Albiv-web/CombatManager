@@ -21,6 +21,8 @@ namespace CombatManager.Ui
         private Vector2 _redMoveScroll;
         private Vector2 _redStatusScroll;
         private float _lastLiveParityRead = -100f;
+        private bool _graphDragging;
+        private Vector2 _lastGraphMouse;
 
         internal bool Active => _active;
 
@@ -67,6 +69,7 @@ namespace CombatManager.Ui
         private void DrawEditor(CombatManagerEditorLayout layout)
         {
             RefreshLiveParityIfNeeded(force: false);
+            HandleGraphInput(layout.Grid);
             DrawFullscreenBackdrop(layout.Root);
 
             AiDuelFrame frame = _state.BuildDuelFrame();
@@ -122,9 +125,13 @@ namespace CombatManager.Ui
         {
             GUILayout.BeginArea(rect);
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button("Fit", CombatManagerTheme.Button, GUILayout.Width(56f)))
-                _state.GridZoom = 1f;
-            _state.GridZoom = ToolbarSlider("Zoom", _state.GridZoom, 0.5f, 3f, "x", 96f);
+            if (GUILayout.Button("Fit Duel", CombatManagerTheme.Button, GUILayout.Width(78f)))
+                _state.FitDuel();
+            if (GUILayout.Button("-", CombatManagerTheme.Button, GUILayout.Width(28f)))
+                _state.AdjustGridZoom(1f / 1.2f);
+            _state.SetGridZoom(ToolbarSlider("Zoom", _state.GridZoom, 0.25f, 8f, "x", 92f));
+            if (GUILayout.Button("+", CombatManagerTheme.Button, GUILayout.Width(28f)))
+                _state.AdjustGridZoom(1.2f);
             _state.PlaybackSpeed = ToolbarSlider("Speed", _state.PlaybackSpeed, 0.1f, 5f, "x", 96f);
             GUILayout.FlexibleSpace();
             if (GUILayout.Button("Close", CombatManagerTheme.Button, GUILayout.Width(68f)))
@@ -132,15 +139,31 @@ namespace CombatManager.Ui
             GUILayout.EndHorizontal();
 
             GUILayout.BeginHorizontal();
-            _state.ShowTrail = ToggleButton("Trails", _state.ShowTrail, GUILayout.Width(72f));
-            _state.ShowDesiredTrail = ToggleButton("AI Trail", _state.ShowDesiredTrail, GUILayout.Width(76f));
-            _state.ShowRawSteer = ToggleButton("Raw", _state.ShowRawSteer, GUILayout.Width(62f));
-            _state.ShowMotionPoint = ToggleButton("Motion", _state.ShowMotionPoint, GUILayout.Width(72f));
-            _state.ShowLegend = ToggleButton("Legend", _state.ShowLegend, GUILayout.Width(72f));
+            GraphViewButton("Red", AiGraphViewMode.RedCentered, GUILayout.Width(44f));
+            GraphViewButton("Blue", AiGraphViewMode.BlueCentered, GUILayout.Width(48f));
+            GraphViewButton("Free", AiGraphViewMode.Freecam, GUILayout.Width(48f));
+            GUILayout.Space(8f);
+            GraphDetailButton("Clean", AiGraphDetailMode.Clean, GUILayout.Width(60f));
+            GraphDetailButton("Tactical", AiGraphDetailMode.Tactical, GUILayout.Width(74f));
+            GraphDetailButton("Debug", AiGraphDetailMode.Debug, GUILayout.Width(62f));
             GUILayout.FlexibleSpace();
             GUILayout.Label("Ctrl+Shift+C", CombatManagerTheme.Mini, GUILayout.Width(96f));
             GUILayout.EndHorizontal();
             GUILayout.EndArea();
+        }
+
+        private void GraphViewButton(string label, AiGraphViewMode mode, params GUILayoutOption[] options)
+        {
+            GUIStyle style = _state.GraphViewMode == mode ? CombatManagerTheme.ActiveButton : CombatManagerTheme.Button;
+            if (GUILayout.Button(label, style, options))
+                _state.SetGraphViewMode(mode);
+        }
+
+        private void GraphDetailButton(string label, AiGraphDetailMode mode, params GUILayoutOption[] options)
+        {
+            GUIStyle style = _state.GraphDetailMode == mode ? CombatManagerTheme.ActiveButton : CombatManagerTheme.Button;
+            if (GUILayout.Button(label, style, options))
+                _state.SetGraphDetailMode(mode);
         }
 
         private static float ToolbarSlider(string label, float value, float min, float max, string suffix, float sliderWidth)
@@ -149,6 +172,49 @@ namespace CombatManager.Ui
             float adjusted = GUILayout.HorizontalSlider(value, min, max, GUILayout.Width(sliderWidth));
             GUILayout.Label($"{adjusted:0.#}{suffix}", CombatManagerTheme.Mini, GUILayout.Width(36f));
             return adjusted;
+        }
+
+        private void HandleGraphInput(Rect graphRect)
+        {
+            Event current = Event.current;
+            if (current == null)
+                return;
+
+            bool insideGraph = graphRect.Contains(current.mousePosition);
+            if (current.type == EventType.ScrollWheel && insideGraph)
+            {
+                _state.AdjustGridZoom(Mathf.Pow(1.12f, -current.delta.y));
+                current.Use();
+                return;
+            }
+
+            if (_state.GraphViewMode != AiGraphViewMode.Freecam)
+            {
+                _graphDragging = false;
+                return;
+            }
+
+            if (current.type == EventType.MouseDown && current.button == 0 && insideGraph)
+            {
+                _graphDragging = true;
+                _lastGraphMouse = current.mousePosition;
+                current.Use();
+                return;
+            }
+
+            if (current.type == EventType.MouseDrag && current.button == 0 && _graphDragging)
+            {
+                Vector2 delta = current.mousePosition - _lastGraphMouse;
+                Rect innerGraph = new Rect(0f, 0f, Mathf.Max(1f, graphRect.width - 16f), Mathf.Max(1f, graphRect.height - 16f));
+                AiSimulationGridProjection projection = AiSimulationGridProjection.For(innerGraph, _state);
+                _state.PanFreecam(delta, projection.MetersPerPixel);
+                _lastGraphMouse = current.mousePosition;
+                current.Use();
+                return;
+            }
+
+            if (current.type == EventType.MouseUp && current.button == 0)
+                _graphDragging = false;
         }
 
         private static void DrawStatusChip(Rect rect)

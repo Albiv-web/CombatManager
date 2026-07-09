@@ -73,6 +73,20 @@ namespace CombatManager.Ai
         Red
     }
 
+    internal enum AiGraphViewMode
+    {
+        RedCentered,
+        BlueCentered,
+        Freecam
+    }
+
+    internal enum AiGraphDetailMode
+    {
+        Clean,
+        Tactical,
+        Debug
+    }
+
     internal sealed class AiSimEntity
     {
         private const int MaxTrailPoints = 240;
@@ -241,13 +255,16 @@ namespace CombatManager.Ai
         internal float PlaybackSpeed { get; set; } = 1f;
         internal float GridZoom { get; set; } = 1f;
         internal float SimulationTime { get; private set; }
+        internal AiGraphViewMode GraphViewMode { get; private set; } = AiGraphViewMode.RedCentered;
+        internal AiGraphDetailMode GraphDetailMode { get; private set; } = AiGraphDetailMode.Tactical;
+        internal Vector3 FreecamOrigin { get; private set; }
 
         internal bool Playing { get; set; } = true;
         internal bool ShowTrail { get; set; } = true;
         internal bool ShowDesiredTrail { get; set; } = true;
-        internal bool ShowRawSteer { get; set; } = true;
+        internal bool ShowRawSteer { get; set; }
         internal bool ShowMotionPoint { get; set; } = true;
-        internal bool ShowLegend { get; set; } = true;
+        internal bool ShowLegend { get; set; }
         internal bool ShowImportDetails { get; set; }
         internal bool LiveParityEnabled { get; set; }
 
@@ -305,10 +322,94 @@ namespace CombatManager.Ai
             Vector3 redPosition = new Vector3(0f, Red.Altitude, 0f);
             Blue.ResetMotion(bluePosition, InitialHeading(Blue, bluePosition, redPosition));
             Red.ResetMotion(redPosition, InitialHeading(Red, redPosition, bluePosition));
+            if (FreecamOrigin == Vector3.zero)
+                FreecamOrigin = DuelMidpoint();
 
             AiDuelFrame frame = BuildDuelFrame();
             Blue.AddIntentPoint(FrameMotionPoint(frame.Blue));
             Red.AddIntentPoint(FrameMotionPoint(frame.Red));
+        }
+
+        internal void SetGraphViewMode(AiGraphViewMode mode)
+        {
+            if (GraphViewMode != AiGraphViewMode.Freecam && mode == AiGraphViewMode.Freecam)
+                FreecamOrigin = GraphOriginWorld();
+            GraphViewMode = mode;
+        }
+
+        internal void SetGraphDetailMode(AiGraphDetailMode mode)
+        {
+            GraphDetailMode = mode;
+            switch (mode)
+            {
+                case AiGraphDetailMode.Clean:
+                    ShowTrail = false;
+                    ShowDesiredTrail = false;
+                    ShowRawSteer = false;
+                    ShowMotionPoint = false;
+                    ShowLegend = false;
+                    break;
+                case AiGraphDetailMode.Debug:
+                    ShowTrail = true;
+                    ShowDesiredTrail = true;
+                    ShowRawSteer = true;
+                    ShowMotionPoint = true;
+                    ShowLegend = true;
+                    break;
+                default:
+                    ShowTrail = true;
+                    ShowDesiredTrail = true;
+                    ShowRawSteer = false;
+                    ShowMotionPoint = true;
+                    ShowLegend = false;
+                    break;
+            }
+        }
+
+        internal void SetGridZoom(float zoom)
+        {
+            GridZoom = Mathf.Clamp(zoom, 0.25f, 8f);
+        }
+
+        internal void AdjustGridZoom(float factor)
+        {
+            SetGridZoom(GridZoom * Mathf.Max(0.001f, factor));
+        }
+
+        internal void FitDuel()
+        {
+            SetGridZoom(1f);
+            if (GraphViewMode == AiGraphViewMode.Freecam)
+                FreecamOrigin = DuelMidpoint();
+        }
+
+        internal void SetFreecamOrigin(Vector3 origin)
+        {
+            FreecamOrigin = new Vector3(origin.x, 0f, origin.z);
+        }
+
+        internal void PanFreecam(Vector2 screenDelta, float metersPerPixel)
+        {
+            if (GraphViewMode != AiGraphViewMode.Freecam)
+                return;
+
+            FreecamOrigin += new Vector3(
+                -screenDelta.x * metersPerPixel,
+                0f,
+                screenDelta.y * metersPerPixel);
+        }
+
+        internal Vector3 GraphOriginWorld()
+        {
+            switch (GraphViewMode)
+            {
+                case AiGraphViewMode.BlueCentered:
+                    return Blue.Position;
+                case AiGraphViewMode.Freecam:
+                    return FreecamOrigin;
+                default:
+                    return Red.Position;
+            }
         }
 
         internal void ResetCraft()
@@ -570,6 +671,12 @@ namespace CombatManager.Ai
             return frame.HasMotionPoint ? frame.MotionPoint : frame.DesiredPoint;
         }
 
+        private Vector3 DuelMidpoint()
+        {
+            Vector3 midpoint = (Blue.Position + Red.Position) * 0.5f;
+            return new Vector3(midpoint.x, 0f, midpoint.z);
+        }
+
         private static void ConfigureShip(
             AiSimEntity entity,
             AiSimulationPreset preset,
@@ -777,7 +884,7 @@ namespace CombatManager.Ai
 
         internal static AiSimulationGridProjection For(Rect rect, AiSimulationState state)
         {
-            float zoom = Mathf.Clamp(state.GridZoom, 0.5f, 3f);
+            float zoom = Mathf.Clamp(state.GridZoom, 0.25f, 8f);
             float duelRange = PlanarMath.GroundDistance(state.Blue.Position, state.Red.Position);
             float desiredSpan = Mathf.Max(
                 Mathf.Max(state.Blue.Radius, state.Red.Radius) * 1.45f,
@@ -788,7 +895,7 @@ namespace CombatManager.Ai
             return new AiSimulationGridProjection
             {
                 Rect = rect,
-                OriginWorld = state.Red.Position,
+                OriginWorld = state.GraphOriginWorld(),
                 VisibleRadius = radius,
                 VisibleHalfWidth = rect.width * metersPerPixel * 0.5f,
                 VisibleHalfHeight = rect.height * metersPerPixel * 0.5f,

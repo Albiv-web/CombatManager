@@ -56,3 +56,9 @@
 - Added read-only Live Parity capture for comparing focused-craft observed AI requests against predicted requests.
 - Added request prediction for ship/tank, hover, six-axis, and airplane movement-card models.
 - Updated AI internals documentation with focused decompile summaries for firing-angle, adjustment, pathfinding, manoeuvre common variables, FtdAiWrapper, and target manager research.
+
+0.2.1
+- Added Red-centered, Blue-centered, and Freecam graph view modes.
+- Added mouse-wheel graph zoom, toolbar zoom buttons, and Freecam drag-pan.
+- Expanded zoom range to 0.25x-8x while keeping markers, text, arrows, and line widths fixed in screen pixels.
+- Added Clean, Tactical, and Debug graph detail modes with label collision avoidance and a fixed-pixel scale bar.

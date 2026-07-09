@@ -1,14 +1,15 @@
 # CombatManager
 
 CombatManager is a From The Depths mod based on the working structure of
-EndlessShapes Unlimited. V2.0 presents a symmetric Blue-vs-Red AI duel sandbox
+EndlessShapes Unlimited. V2.1 presents a symmetric Blue-vs-Red AI duel sandbox
 with editable AI blueprints: Blue/player controls are tabbed on the left,
-Red/enemy controls are tabbed on the right, and the Red-centered tactical graph
-fills the middle. Blueprints mirror the vanilla mainframe, behaviour,
-manoeuvre, and adjustment setup so presets, import, simulation, and the future
-write-to-craft flow all share one data shape. The Blue Import tab also has a
-read-only Live Parity harness that compares observed focused-craft AI control
-requests against CombatManager's vanilla-mapped prediction.
+Red/enemy controls are tabbed on the right, and the tactical graph fills the
+middle with Red-centered, Blue-centered, and Freecam view modes. Blueprints
+mirror the vanilla mainframe, behaviour, manoeuvre, and adjustment setup so
+presets, import, simulation, and the future write-to-craft flow all share one
+data shape. The Blue Import tab also has a read-only Live Parity harness that
+compares observed focused-craft AI control requests against CombatManager's
+vanilla-mapped prediction.
 
 - `plugin.json` tells From The Depths which assembly to load.
 - `CombatManager.dll` contains a `GamePlugin_PostLoad` implementation and the
@@ -52,17 +53,23 @@ C:\Users\<you>\Documents\From The Depths\Mods\CombatManager
 Press `Ctrl+Shift+C` to open/close the sandbox. The hotkey is guarded against
 text input, but it no longer depends on a focused craft or build mode.
 
-The V2.0 editor is read-only toward the real game. It shows:
+The V2.1 editor is read-only toward the real game. It shows:
 
-- An opaque fullscreen Red-centered top-down X/Z tactical grid.
+- An opaque fullscreen top-down X/Z tactical grid with Red, Blue, and Freecam
+  camera modes.
+- Mouse-wheel graph zoom from 0.25x to 8x, with marker/text size fixed in screen
+  pixels while world geometry scales.
+- Freecam drag-pan and Fit Duel recentering.
+- Clean, Tactical, and Debug graph detail modes with label collision avoidance
+  and a scale bar.
 - Tabbed Blue/player and Red/enemy panels with independent scrolling.
 - Blue and Red mainframe controls for circle, point-at, broadside, and Naval 2.0.
 - Ship/tank, hover, six-axis, and airplane manoeuvre simulation for both sides.
 - Ship duel, broadside duel, hover duel, and plane intercept presets.
 - Raw steer bearing, finite motion point, desired facing, trails, range labels,
   and optional legend for both simulated craft.
-- Top-toolbar controls for scenario presets, play, pause, step, reset, zoom,
-  fit duel, trail visibility, and tactical overlays.
+- Top-toolbar controls for scenario presets, play, pause, step, reset, graph
+  view mode, detail mode, zoom, and fit duel.
 - Larger, clearer HUD text and graph labels with opaque backplates.
 - Optional one-shot `Import Blue AI` seeding from a selected mainframe on the
   focused craft. Red remains manually configured.

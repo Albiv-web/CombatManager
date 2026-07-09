@@ -18,6 +18,12 @@ namespace CombatManager.Verification
                 RotateYawMatchesUnityTopDownConvention();
                 GroundDistanceUsesOnlyXZ();
                 RedProjectionStaysCenteredWhileBothMove();
+                BlueProjectionCanBeCentered();
+                FreecamProjectionUsesStoredOrigin();
+                FreecamPanUsesMetersPerPixelWithMapDragSigns();
+                ZoomScalesMetersPerPixelAndClamps();
+                FitDuelResetsZoomAndFreecamOrigin();
+                GraphDetailModesSetExpectedVisibility();
                 SimultaneousDuelStepIsMirrorStable();
                 BothEntitiesPlanIndependently();
                 CirclePlannerSeparatesRawSteerFromMotionPoint();
@@ -97,6 +103,97 @@ namespace CombatManager.Verification
             Vector2 red = projection.WorldToScreen(state.Red.Position);
             AssertNear(rect.center.x, red.x, "red centered x");
             AssertNear(rect.center.y, red.y, "red centered y");
+        }
+
+        private static void BlueProjectionCanBeCentered()
+        {
+            var state = new AiSimulationState();
+            state.ApplyScenarioPreset(AiScenarioPreset.ShipDuel);
+            state.Step(1f);
+            state.SetGraphViewMode(AiGraphViewMode.BlueCentered);
+
+            Rect rect = new Rect(20f, 10f, 900f, 500f);
+            AiSimulationGridProjection projection = AiSimulationGridProjection.For(rect, state);
+            Vector2 blue = projection.WorldToScreen(state.Blue.Position);
+            AssertNear(rect.center.x, blue.x, "blue centered x");
+            AssertNear(rect.center.y, blue.y, "blue centered y");
+        }
+
+        private static void FreecamProjectionUsesStoredOrigin()
+        {
+            var state = new AiSimulationState();
+            state.SetGraphViewMode(AiGraphViewMode.Freecam);
+            Vector3 origin = new Vector3(123f, 0f, -456f);
+            state.SetFreecamOrigin(origin);
+
+            Rect rect = new Rect(0f, 0f, 800f, 400f);
+            AiSimulationGridProjection projection = AiSimulationGridProjection.For(rect, state);
+            Vector2 center = projection.WorldToScreen(origin);
+            AssertNear(rect.center.x, center.x, "freecam origin x");
+            AssertNear(rect.center.y, center.y, "freecam origin y");
+        }
+
+        private static void FreecamPanUsesMetersPerPixelWithMapDragSigns()
+        {
+            var state = new AiSimulationState();
+            state.SetGraphViewMode(AiGraphViewMode.Freecam);
+            state.SetFreecamOrigin(Vector3.zero);
+            Rect rect = new Rect(0f, 0f, 800f, 400f);
+            AiSimulationGridProjection projection = AiSimulationGridProjection.For(rect, state);
+            float metersPerPixel = projection.MetersPerPixel;
+
+            state.PanFreecam(new Vector2(10f, -20f), metersPerPixel);
+
+            AssertNear(-10f * metersPerPixel, state.FreecamOrigin.x, "freecam pan x");
+            AssertNear(-20f * metersPerPixel, state.FreecamOrigin.z, "freecam pan z");
+        }
+
+        private static void ZoomScalesMetersPerPixelAndClamps()
+        {
+            var state = new AiSimulationState();
+            Rect rect = new Rect(0f, 0f, 800f, 400f);
+            state.SetGridZoom(1f);
+            float baseMetersPerPixel = AiSimulationGridProjection.For(rect, state).MetersPerPixel;
+            state.SetGridZoom(2f);
+            float zoomedMetersPerPixel = AiSimulationGridProjection.For(rect, state).MetersPerPixel;
+            AssertNear(baseMetersPerPixel * 0.5f, zoomedMetersPerPixel, "2x zoom halves meters per pixel");
+
+            state.SetGridZoom(100f);
+            AssertNear(8f, state.GridZoom, "max zoom clamp");
+            state.SetGridZoom(0.01f);
+            AssertNear(0.25f, state.GridZoom, "min zoom clamp");
+        }
+
+        private static void FitDuelResetsZoomAndFreecamOrigin()
+        {
+            var state = new AiSimulationState();
+            state.ApplyScenarioPreset(AiScenarioPreset.PlaneIntercept);
+            state.SetGraphViewMode(AiGraphViewMode.Freecam);
+            state.SetFreecamOrigin(new Vector3(999f, 0f, -999f));
+            state.SetGridZoom(4f);
+
+            state.FitDuel();
+
+            Vector3 midpoint = (state.Blue.Position + state.Red.Position) * 0.5f;
+            AssertNear(1f, state.GridZoom, "fit resets zoom");
+            AssertNear(midpoint.x, state.FreecamOrigin.x, "fit freecam x");
+            AssertNear(midpoint.z, state.FreecamOrigin.z, "fit freecam z");
+        }
+
+        private static void GraphDetailModesSetExpectedVisibility()
+        {
+            var state = new AiSimulationState();
+            state.SetGraphDetailMode(AiGraphDetailMode.Clean);
+            if (state.ShowTrail || state.ShowDesiredTrail || state.ShowRawSteer || state.ShowMotionPoint || state.ShowLegend)
+                throw new InvalidOperationException("clean graph detail mode left debug layers visible");
+
+            state.SetGraphDetailMode(AiGraphDetailMode.Tactical);
+            if (!state.ShowTrail || !state.ShowDesiredTrail || state.ShowRawSteer || !state.ShowMotionPoint || state.ShowLegend)
+                throw new InvalidOperationException("tactical graph detail mode did not set expected layers");
+
+            state.SetGraphDetailMode(AiGraphDetailMode.Debug);
+            if (!state.ShowTrail || !state.ShowDesiredTrail || !state.ShowRawSteer || !state.ShowMotionPoint || !state.ShowLegend)
+                throw new InvalidOperationException("debug graph detail mode did not enable all graph layers");
         }
 
         private static void SimultaneousDuelStepIsMirrorStable()
