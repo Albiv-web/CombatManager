@@ -22,6 +22,7 @@ namespace CombatManager.Ui
         private Vector2 _redStatusScroll;
         private float _lastLiveParityRead = -100f;
         private bool _graphDragging;
+        private bool _graphRotating;
         private Vector2 _lastGraphMouse;
 
         internal bool Active => _active;
@@ -97,6 +98,7 @@ namespace CombatManager.Ui
             ScenarioButton("Broadside", AiScenarioPreset.BroadsideDuel, GUILayout.Width(92f));
             ScenarioButton("Hover", AiScenarioPreset.HoverDuel, GUILayout.Width(72f));
             ScenarioButton("Planes", AiScenarioPreset.PlaneIntercept, GUILayout.Width(72f));
+            ScenarioButton("Aerial", AiScenarioPreset.AerialAttackRun, GUILayout.Width(72f));
             GUILayout.EndHorizontal();
             GUILayout.EndArea();
         }
@@ -127,6 +129,8 @@ namespace CombatManager.Ui
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("Fit Duel", CombatManagerTheme.Button, GUILayout.Width(78f)))
                 _state.FitDuel();
+            if (GUILayout.Button("Reset View", CombatManagerTheme.Button, GUILayout.Width(92f)))
+                _state.ResetGraphView();
             if (GUILayout.Button("-", CombatManagerTheme.Button, GUILayout.Width(28f)))
                 _state.AdjustGridZoom(1f / 1.2f);
             _state.SetGridZoom(ToolbarSlider("Zoom", _state.GridZoom, 0.25f, 8f, "x", 92f));
@@ -139,6 +143,10 @@ namespace CombatManager.Ui
             GUILayout.EndHorizontal();
 
             GUILayout.BeginHorizontal();
+            GraphDimensionButton("2D", AiGraphDimensionMode.Flat2D, GUILayout.Width(42f));
+            GraphDimensionButton("3D", AiGraphDimensionMode.Scene3D, GUILayout.Width(42f));
+            _state.SetGraphVerticalScale(ToolbarSlider("Alt", _state.GraphVerticalScale, 0.05f, 2f, "x", 82f));
+            GUILayout.Space(8f);
             GraphViewButton("Red", AiGraphViewMode.RedCentered, GUILayout.Width(44f));
             GraphViewButton("Blue", AiGraphViewMode.BlueCentered, GUILayout.Width(48f));
             GraphViewButton("Free", AiGraphViewMode.Freecam, GUILayout.Width(48f));
@@ -150,6 +158,13 @@ namespace CombatManager.Ui
             GUILayout.Label("Ctrl+Shift+C", CombatManagerTheme.Mini, GUILayout.Width(96f));
             GUILayout.EndHorizontal();
             GUILayout.EndArea();
+        }
+
+        private void GraphDimensionButton(string label, AiGraphDimensionMode mode, params GUILayoutOption[] options)
+        {
+            GUIStyle style = _state.GraphDimensionMode == mode ? CombatManagerTheme.ActiveButton : CombatManagerTheme.Button;
+            if (GUILayout.Button(label, style, options))
+                _state.SetGraphDimensionMode(mode);
         }
 
         private void GraphViewButton(string label, AiGraphViewMode mode, params GUILayoutOption[] options)
@@ -188,14 +203,9 @@ namespace CombatManager.Ui
                 return;
             }
 
-            if (_state.GraphViewMode != AiGraphViewMode.Freecam)
-            {
-                _graphDragging = false;
-                return;
-            }
-
             if (current.type == EventType.MouseDown && current.button == 0 && insideGraph)
             {
+                _state.Begin3DPan();
                 _graphDragging = true;
                 _lastGraphMouse = current.mousePosition;
                 current.Use();
@@ -206,8 +216,34 @@ namespace CombatManager.Ui
             {
                 Vector2 delta = current.mousePosition - _lastGraphMouse;
                 Rect innerGraph = new Rect(0f, 0f, Mathf.Max(1f, graphRect.width - 16f), Mathf.Max(1f, graphRect.height - 16f));
-                AiSimulationGridProjection projection = AiSimulationGridProjection.For(innerGraph, _state);
-                _state.PanFreecam(delta, projection.MetersPerPixel);
+                if (_state.GraphDimensionMode == AiGraphDimensionMode.Scene3D)
+                {
+                    AiSimulation3DProjection projection = AiSimulation3DProjection.For(innerGraph, _state);
+                    _state.PanFreecam3D(delta, projection.MetersPerPixel);
+                }
+                else
+                {
+                    AiSimulationGridProjection projection = AiSimulationGridProjection.For(innerGraph, _state);
+                    _state.PanFreecam(delta, projection.MetersPerPixel);
+                }
+                _lastGraphMouse = current.mousePosition;
+                current.Use();
+                return;
+            }
+
+            if (current.type == EventType.MouseDown && current.button == 1 && insideGraph)
+            {
+                _state.SetGraphDimensionMode(AiGraphDimensionMode.Scene3D);
+                _graphRotating = true;
+                _lastGraphMouse = current.mousePosition;
+                current.Use();
+                return;
+            }
+
+            if (current.type == EventType.MouseDrag && current.button == 1 && _graphRotating)
+            {
+                Vector2 delta = current.mousePosition - _lastGraphMouse;
+                _state.RotateGraph3D(delta);
                 _lastGraphMouse = current.mousePosition;
                 current.Use();
                 return;
@@ -215,6 +251,8 @@ namespace CombatManager.Ui
 
             if (current.type == EventType.MouseUp && current.button == 0)
                 _graphDragging = false;
+            if (current.type == EventType.MouseUp && current.button == 1)
+                _graphRotating = false;
         }
 
         private static void DrawStatusChip(Rect rect)
@@ -352,6 +390,11 @@ namespace CombatManager.Ui
             EntityPresetButton(entity, "Broadside", AiSimulationPreset.Broadside);
             EntityPresetButton(entity, "Naval 2.0", AiSimulationPreset.NavalBroadside);
             GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
+            EntityPresetButton(entity, "Attack 1", AiSimulationPreset.AttackRun1);
+            EntityPresetButton(entity, "Attack 2", AiSimulationPreset.AttackRun2);
+            EntityPresetButton(entity, "Attack 3", AiSimulationPreset.AttackRun3);
+            GUILayout.EndHorizontal();
 
             GUILayout.Space(6f);
             GUILayout.Label("Preferred side", CombatManagerTheme.Mini);
@@ -373,8 +416,42 @@ namespace CombatManager.Ui
                 entity.BroadsideAngle = SliderRow("Broadside", entity.BroadsideAngle, 10f, 170f, "deg");
             if (entity.Preset == AiSimulationPreset.NavalBroadside)
                 entity.BroadsideOuterRadius = SliderRow("Leave range", entity.BroadsideOuterRadius, entity.Radius + 20f, 2500f, "m");
+            if (entity.Preset == AiSimulationPreset.AttackRun1 || entity.Preset == AiSimulationPreset.AttackRun2 || entity.Preset == AiSimulationPreset.AttackRun3)
+                DrawAttackRunControls(entity);
 
             _state.CaptureBlueprintFromEntity(entity);
+        }
+
+        private static void DrawAttackRunControls(AiSimEntity entity)
+        {
+            GUILayout.Space(8f);
+            GUILayout.Label("Attack run", CombatManagerTheme.Header);
+            if (entity.Preset == AiSimulationPreset.AttackRun1)
+            {
+                entity.AttackRunBeginDistance = SliderRow("Begin", entity.AttackRunBeginDistance, 50f, 1500f, "m");
+                entity.AttackRunAbortDistance = SliderRow("Abort", entity.AttackRunAbortDistance, 10f, 800f, "m");
+                entity.AttackRunWaitTime = SliderRow("Wait", entity.AttackRunWaitTime, 0f, 60f, "s");
+                entity.AttackRunAttackAltitude = SliderRow("Attack alt", entity.AttackRunAttackAltitude, -100f, 1000f, "m");
+                entity.AttackRunDisengageAltitude = SliderRow("Flee alt", entity.AttackRunDisengageAltitude, 0f, 1200f, "m");
+                return;
+            }
+
+            entity.AttackRunBreakoffDistance = SliderRow("Breakoff", entity.AttackRunBreakoffDistance, 1f, 1000f, "m");
+            entity.AttackRunPitchDistance = SliderRow("Pitch dist", entity.AttackRunPitchDistance, 0f, 2000f, "m");
+            entity.AttackRunReengageDistance = SliderRow("Reengage", entity.AttackRunReengageDistance, 1f, 5000f, "m");
+            entity.AttackRunReengageTime = SliderRow("Reengage t", entity.AttackRunReengageTime, 0f, 120f, "s");
+            entity.AttackRunBreakoffAltitude = SliderRow("Break alt", entity.AttackRunBreakoffAltitude, -1000f, 1000f, "m");
+            entity.AttackRunCombatAltitude = SliderRow("Flee alt", entity.AttackRunCombatAltitude, 0f, 2000f, "m");
+            if (entity.Preset == AiSimulationPreset.AttackRun3)
+            {
+                entity.AttackRunEngagementAltitude = SliderRow("Engage alt", entity.AttackRunEngagementAltitude, -1000f, 1000f, "m");
+                entity.AttackRunPredictionPoint = SliderRow("Direct pt", entity.AttackRunPredictionPoint, 0f, 1000f, "m");
+                GUILayout.BeginHorizontal();
+                entity.AttackRunUsePrediction = ToggleButton("Predict", entity.AttackRunUsePrediction);
+                entity.AttackRunFlyover = ToggleButton("Flyover", entity.AttackRunFlyover);
+                entity.AttackRunIgnoreAltitude = ToggleButton("Ignore alt", entity.AttackRunIgnoreAltitude);
+                GUILayout.EndHorizontal();
+            }
         }
 
         private void DrawEntityMovementControls(AiSimEntity entity)

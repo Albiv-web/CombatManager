@@ -101,7 +101,7 @@ namespace CombatManager.Ai
                 CraftPosition = entity.Position,
                 CraftHeading = entity.Heading,
                 CraftVelocity = entity.Velocity,
-                CraftAltitude = entity.Altitude,
+                CraftAltitude = entity.Position.y,
                 TarryDistance = entity.ShipTarryDistance,
                 ReverseAllowed = entity.ShipReverseAllowed,
                 HoverYawLockDistance = entity.HoverYawLockDistance,

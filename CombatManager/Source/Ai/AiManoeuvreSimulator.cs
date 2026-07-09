@@ -27,7 +27,7 @@ namespace CombatManager.Ai
                     break;
             }
 
-            entity.Position = new Vector3(entity.Position.x, entity.Altitude, entity.Position.z);
+            AdvanceAltitude(entity, goal.y, delta);
         }
 
         private static void AdvanceShipOrTank(AiSimEntity entity, AiSimulationFrame frame, Vector3 desiredMoveDirection, float distance, float delta)
@@ -129,6 +129,37 @@ namespace CombatManager.Ai
             float travel = entity.CraftCurrentSpeed * delta;
             entity.Position += entity.Heading * travel;
             entity.Velocity = entity.Heading * (travel / Mathf.Max(0.001f, delta));
+        }
+
+        private static void AdvanceAltitude(AiSimEntity entity, float targetAltitude, float delta)
+        {
+            if (entity.CraftMovementModel == AiCraftMovementModel.ShipOrTank)
+            {
+                entity.Position = new Vector3(entity.Position.x, entity.Altitude, entity.Position.z);
+                entity.VerticalSpeed = 0f;
+                entity.Velocity = new Vector3(entity.Velocity.x, 0f, entity.Velocity.z);
+                return;
+            }
+
+            targetAltitude = Mathf.Max(0f, targetAltitude);
+            float altitudeError = targetAltitude - entity.Position.y;
+            float maxVerticalSpeed = entity.CraftMovementModel == AiCraftMovementModel.Airplane
+                ? Mathf.Max(8f, entity.CraftSpeed * 0.22f)
+                : Mathf.Max(8f, entity.CraftSpeed * 0.55f);
+            float targetVerticalSpeed = Mathf.Clamp(altitudeError * 0.45f, -maxVerticalSpeed, maxVerticalSpeed);
+            float verticalAcceleration = Mathf.Max(4f, entity.CraftAcceleration * 0.7f);
+            entity.VerticalSpeed = Mathf.MoveTowards(entity.VerticalSpeed, targetVerticalSpeed, verticalAcceleration * delta);
+
+            float verticalTravel = entity.VerticalSpeed * delta;
+            if (Mathf.Abs(verticalTravel) > Mathf.Abs(altitudeError))
+            {
+                verticalTravel = altitudeError;
+                entity.VerticalSpeed = 0f;
+            }
+
+            entity.Position += new Vector3(0f, verticalTravel, 0f);
+            entity.Position = new Vector3(entity.Position.x, Mathf.Max(0f, entity.Position.y), entity.Position.z);
+            entity.Velocity = new Vector3(entity.Velocity.x, verticalTravel / Mathf.Max(0.001f, delta), entity.Velocity.z);
         }
 
         private static float ShipThrottle01(AiSimEntity entity, float distance, Vector3 desiredMoveDirection, bool reversing)

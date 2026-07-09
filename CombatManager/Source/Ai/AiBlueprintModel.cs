@@ -10,7 +10,10 @@ namespace CombatManager.Ai
         HoverSniper,
         CircleShip,
         FastAircraftInterceptor,
-        CloseRangeRammer
+        CloseRangeRammer,
+        AttackRunOnePlane,
+        AttackRunTwoBomber,
+        AttackRunThreeInterceptor
     }
 
     internal enum AiBlueprintAltitudeReference
@@ -57,6 +60,25 @@ namespace CombatManager.Ai
         internal float AirplaneBankingTurnAbove { get; set; } = 20f;
         internal float AirplaneBankingTurnRoll { get; set; } = 45f;
         internal float AirplanePitchForAltitude { get; set; } = 15f;
+
+        internal float AttackRunBeginDistance { get; set; } = 250f;
+        internal float AttackRunAbortDistance { get; set; } = 50f;
+        internal float AttackRunWaitTime { get; set; } = 15f;
+        internal float AttackRunAttackAltitude { get; set; }
+        internal float AttackRunDisengageAltitude { get; set; } = 75f;
+        internal float AttackRunBreakoffDistance { get; set; } = 400f;
+        internal float AttackRunReengageDistance { get; set; } = 1000f;
+        internal float AttackRunReengageTime { get; set; } = 15f;
+        internal float AttackRunPitchDistance { get; set; } = 800f;
+        internal float AttackRunBreakoffAltitude { get; set; } = -1000f;
+        internal float AttackRunAbortTime { get; set; } = 20f;
+        internal float AttackRunAbortTimerStartDistance { get; set; }
+        internal float AttackRunCombatAltitude { get; set; } = 200f;
+        internal float AttackRunEngagementAltitude { get; set; } = 100f;
+        internal float AttackRunPredictionPoint { get; set; } = 400f;
+        internal bool AttackRunUsePrediction { get; set; }
+        internal bool AttackRunFlyover { get; set; }
+        internal bool AttackRunIgnoreAltitude { get; set; } = true;
 
         internal string AdjustmentVehicleType { get; set; } = "Surface ship";
         internal AiBlueprintAltitudeReference AltitudeReference { get; set; } = AiBlueprintAltitudeReference.OnWater;
@@ -108,6 +130,24 @@ namespace CombatManager.Ai
                 AirplaneBankingTurnAbove = AirplaneBankingTurnAbove,
                 AirplaneBankingTurnRoll = AirplaneBankingTurnRoll,
                 AirplanePitchForAltitude = AirplanePitchForAltitude,
+                AttackRunBeginDistance = AttackRunBeginDistance,
+                AttackRunAbortDistance = AttackRunAbortDistance,
+                AttackRunWaitTime = AttackRunWaitTime,
+                AttackRunAttackAltitude = AttackRunAttackAltitude,
+                AttackRunDisengageAltitude = AttackRunDisengageAltitude,
+                AttackRunBreakoffDistance = AttackRunBreakoffDistance,
+                AttackRunReengageDistance = AttackRunReengageDistance,
+                AttackRunReengageTime = AttackRunReengageTime,
+                AttackRunPitchDistance = AttackRunPitchDistance,
+                AttackRunBreakoffAltitude = AttackRunBreakoffAltitude,
+                AttackRunAbortTime = AttackRunAbortTime,
+                AttackRunAbortTimerStartDistance = AttackRunAbortTimerStartDistance,
+                AttackRunCombatAltitude = AttackRunCombatAltitude,
+                AttackRunEngagementAltitude = AttackRunEngagementAltitude,
+                AttackRunPredictionPoint = AttackRunPredictionPoint,
+                AttackRunUsePrediction = AttackRunUsePrediction,
+                AttackRunFlyover = AttackRunFlyover,
+                AttackRunIgnoreAltitude = AttackRunIgnoreAltitude,
                 AdjustmentVehicleType = AdjustmentVehicleType,
                 AltitudeReference = AltitudeReference,
                 MinimumAltitudeAboveLand = MinimumAltitudeAboveLand,
@@ -150,6 +190,24 @@ namespace CombatManager.Ai
             entity.AirplaneBankingTurnAbove = Mathf.Clamp(AirplaneBankingTurnAbove, 0f, 180f);
             entity.AirplaneBankingTurnRoll = Mathf.Clamp(AirplaneBankingTurnRoll, 0f, 90f);
             entity.AirplanePitchForAltitude = Mathf.Clamp(AirplanePitchForAltitude, -45f, 45f);
+            entity.AttackRunBeginDistance = Mathf.Max(1f, AttackRunBeginDistance);
+            entity.AttackRunAbortDistance = Mathf.Max(1f, AttackRunAbortDistance);
+            entity.AttackRunWaitTime = Mathf.Max(0f, AttackRunWaitTime);
+            entity.AttackRunAttackAltitude = AttackRunAttackAltitude;
+            entity.AttackRunDisengageAltitude = Mathf.Max(0f, AttackRunDisengageAltitude);
+            entity.AttackRunBreakoffDistance = Mathf.Max(1f, AttackRunBreakoffDistance);
+            entity.AttackRunReengageDistance = Mathf.Max(1f, AttackRunReengageDistance);
+            entity.AttackRunReengageTime = Mathf.Max(0f, AttackRunReengageTime);
+            entity.AttackRunPitchDistance = Mathf.Max(0f, AttackRunPitchDistance);
+            entity.AttackRunBreakoffAltitude = AttackRunBreakoffAltitude;
+            entity.AttackRunAbortTime = Mathf.Max(0f, AttackRunAbortTime);
+            entity.AttackRunAbortTimerStartDistance = Mathf.Max(0f, AttackRunAbortTimerStartDistance);
+            entity.AttackRunCombatAltitude = Mathf.Max(0f, AttackRunCombatAltitude);
+            entity.AttackRunEngagementAltitude = AttackRunEngagementAltitude;
+            entity.AttackRunPredictionPoint = Mathf.Max(0f, AttackRunPredictionPoint);
+            entity.AttackRunUsePrediction = AttackRunUsePrediction;
+            entity.AttackRunFlyover = AttackRunFlyover;
+            entity.AttackRunIgnoreAltitude = AttackRunIgnoreAltitude;
         }
 
         internal void CaptureEntityFields(AiSimEntity entity)
@@ -179,6 +237,24 @@ namespace CombatManager.Ai
             AirplaneBankingTurnAbove = entity.AirplaneBankingTurnAbove;
             AirplaneBankingTurnRoll = entity.AirplaneBankingTurnRoll;
             AirplanePitchForAltitude = entity.AirplanePitchForAltitude;
+            AttackRunBeginDistance = entity.AttackRunBeginDistance;
+            AttackRunAbortDistance = entity.AttackRunAbortDistance;
+            AttackRunWaitTime = entity.AttackRunWaitTime;
+            AttackRunAttackAltitude = entity.AttackRunAttackAltitude;
+            AttackRunDisengageAltitude = entity.AttackRunDisengageAltitude;
+            AttackRunBreakoffDistance = entity.AttackRunBreakoffDistance;
+            AttackRunReengageDistance = entity.AttackRunReengageDistance;
+            AttackRunReengageTime = entity.AttackRunReengageTime;
+            AttackRunPitchDistance = entity.AttackRunPitchDistance;
+            AttackRunBreakoffAltitude = entity.AttackRunBreakoffAltitude;
+            AttackRunAbortTime = entity.AttackRunAbortTime;
+            AttackRunAbortTimerStartDistance = entity.AttackRunAbortTimerStartDistance;
+            AttackRunCombatAltitude = entity.AttackRunCombatAltitude;
+            AttackRunEngagementAltitude = entity.AttackRunEngagementAltitude;
+            AttackRunPredictionPoint = entity.AttackRunPredictionPoint;
+            AttackRunUsePrediction = entity.AttackRunUsePrediction;
+            AttackRunFlyover = entity.AttackRunFlyover;
+            AttackRunIgnoreAltitude = entity.AttackRunIgnoreAltitude;
         }
 
         internal string BehaviourClassName()
@@ -194,6 +270,12 @@ namespace CombatManager.Ai
                     return "BehaviourBroadside";
                 case AiSimulationPreset.NavalBroadside:
                     return "FtdNaval";
+                case AiSimulationPreset.AttackRun1:
+                    return "FtdAerial";
+                case AiSimulationPreset.AttackRun2:
+                    return "BehaviourBombingRun";
+                case AiSimulationPreset.AttackRun3:
+                    return "BehaviourAircraft";
                 default:
                     return "BehaviourCircleAtDistance";
             }
@@ -224,7 +306,10 @@ namespace CombatManager.Ai
             AiBlueprintPreset.HoverSniper,
             AiBlueprintPreset.CircleShip,
             AiBlueprintPreset.FastAircraftInterceptor,
-            AiBlueprintPreset.CloseRangeRammer
+            AiBlueprintPreset.CloseRangeRammer,
+            AiBlueprintPreset.AttackRunOnePlane,
+            AiBlueprintPreset.AttackRunTwoBomber,
+            AiBlueprintPreset.AttackRunThreeInterceptor
         };
 
         internal static string Name(AiBlueprintPreset preset)
@@ -241,6 +326,12 @@ namespace CombatManager.Ai
                     return "Fast aircraft interceptor";
                 case AiBlueprintPreset.CloseRangeRammer:
                     return "Close-range rammer";
+                case AiBlueprintPreset.AttackRunOnePlane:
+                    return "Attack run 1.0 plane";
+                case AiBlueprintPreset.AttackRunTwoBomber:
+                    return "Attack run 2.0 bomber";
+                case AiBlueprintPreset.AttackRunThreeInterceptor:
+                    return "Attack run 3.0 interceptor";
                 default:
                     return "Slow ship broadsider";
             }
@@ -281,6 +372,29 @@ namespace CombatManager.Ai
                     blueprint.MainframeName = $"{side} rammer preview";
                     blueprint.PreviewOnly = true;
                     blueprint.Warnings.Add("Ram is preview-only until BehaviourRam is researched and mapped.");
+                    break;
+                case AiBlueprintPreset.AttackRunOnePlane:
+                    ConfigureAircraft(blueprint, AiSimulationPreset.AttackRun1, AiCraftProfile.Airplane, 250f, 95f, 24f, 95f, 75f);
+                    blueprint.MainframeName = $"{side} attack run 1.0 plane";
+                    blueprint.AttackRunBeginDistance = 250f;
+                    blueprint.AttackRunAbortDistance = 50f;
+                    blueprint.AttackRunAttackAltitude = 0f;
+                    blueprint.AttackRunDisengageAltitude = 75f;
+                    blueprint.Warnings.Add("Mirrors FtdAerial attack/fly-away states; pitch PID and adjuster output are approximate.");
+                    break;
+                case AiBlueprintPreset.AttackRunTwoBomber:
+                    ConfigureAircraft(blueprint, AiSimulationPreset.AttackRun2, AiCraftProfile.Airplane, 800f, 105f, 24f, 95f, 200f);
+                    blueprint.MainframeName = $"{side} attack run 2.0 bomber";
+                    blueprint.AttackRunCombatAltitude = 200f;
+                    blueprint.Warnings.Add("Mirrors BehaviourBombingRun attack/flee states; run-away adjustment and pitch PID are approximate.");
+                    break;
+                case AiBlueprintPreset.AttackRunThreeInterceptor:
+                    ConfigureAircraft(blueprint, AiSimulationPreset.AttackRun3, AiCraftProfile.FastAircraft, 1000f, 165f, 38f, 135f, 220f);
+                    blueprint.MainframeName = $"{side} attack run 3.0 interceptor";
+                    blueprint.AttackRunEngagementAltitude = 100f;
+                    blueprint.AttackRunCombatAltitude = 200f;
+                    blueprint.AttackRunUsePrediction = true;
+                    blueprint.Warnings.Add("Mirrors BehaviourAircraft run phases; interception, adjuster, and PID details are approximate.");
                     break;
                 case AiBlueprintPreset.SlowShipBroadsider:
                 default:

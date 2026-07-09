@@ -1,10 +1,10 @@
 # CombatManager
 
 CombatManager is a From The Depths mod based on the working structure of
-EndlessShapes Unlimited. V2.1 presents a symmetric Blue-vs-Red AI duel sandbox
+EndlessShapes Unlimited. V2.2 presents a symmetric Blue-vs-Red AI duel sandbox
 with editable AI blueprints: Blue/player controls are tabbed on the left,
 Red/enemy controls are tabbed on the right, and the tactical graph fills the
-middle with Red-centered, Blue-centered, and Freecam view modes. Blueprints
+middle with top-down 2D plus Unity-rendered 3D view modes. Blueprints
 mirror the vanilla mainframe, behaviour, manoeuvre, and adjustment setup so
 presets, import, simulation, and the future write-to-craft flow all share one
 data shape. The Blue Import tab also has a read-only Live Parity harness that
@@ -53,10 +53,12 @@ C:\Users\<you>\Documents\From The Depths\Mods\CombatManager
 Press `Ctrl+Shift+C` to open/close the sandbox. The hotkey is guarded against
 text input, but it no longer depends on a focused craft or build mode.
 
-The V2.1 editor is read-only toward the real game. It shows:
+The V2.2 editor is read-only toward the real game. It shows:
 
-- An opaque fullscreen top-down X/Z tactical grid with Red, Blue, and Freecam
-  camera modes.
+- An opaque fullscreen tactical graph with top-down 2D and drag-to-3D altitude
+  view modes, plus Red, Blue, and Freecam camera modes.
+- A Unity-rendered 3D graph scene with altitude pillars, climb/dive trails,
+  range rings, intent markers, and fixed-size IMGUI labels.
 - Mouse-wheel graph zoom from 0.25x to 8x, with marker/text size fixed in screen
   pixels while world geometry scales.
 - Freecam drag-pan and Fit Duel recentering.
@@ -64,8 +66,11 @@ The V2.1 editor is read-only toward the real game. It shows:
   and a scale bar.
 - Tabbed Blue/player and Red/enemy panels with independent scrolling.
 - Blue and Red mainframe controls for circle, point-at, broadside, and Naval 2.0.
+- Aerial Attack Run 1.0, Attack Run 2.0, and Attack Run 3.0 sandbox behaviours
+  with vanilla state-machine defaults and approximation labels.
 - Ship/tank, hover, six-axis, and airplane manoeuvre simulation for both sides.
-- Ship duel, broadside duel, hover duel, and plane intercept presets.
+- Ship duel, broadside duel, hover duel, plane intercept, and aerial attack
+  presets.
 - Raw steer bearing, finite motion point, desired facing, trails, range labels,
   and optional legend for both simulated craft.
 - Top-toolbar controls for scenario presets, play, pause, step, reset, graph

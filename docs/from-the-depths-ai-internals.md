@@ -178,6 +178,51 @@ Observed card-to-routine mapping:
 | `AICirclingTankCard` | `BehaviourCircleAtDistance` | `ManoeuvreHover` | On-land adjuster, altitude ignored |
 | `AICirclingPlaneCard` | `BehaviourCircleAtDistance` | `ManoeuvreAirplane` | Above-ground/sea adjuster |
 | `AICirclingHoverCard` | `BehaviourCircleAtDistance` | `ManoeuvreHover` | Above-ground/sea adjuster |
+
+## Aerial Attack Runs
+
+V2.2 focused decompilation added the first aerial combat map for the 3D
+sandbox. The scratch source remains under ignored `artifacts/`; this section is
+the committed summary.
+
+`FtdAerial` is vanilla "Attack run 1.0 (with flyover)". It has two runtime
+states: towards target and away from target. While towards, it aims at the
+target plus `FlyoverHeight` and switches away when ground distance is below the
+lower bombing-run bracket. While away, it keeps the yaw it had at breakoff,
+flies roughly 250m along that bearing, uses the cruise altitude from
+`MinimumAndCruiseAltitude`, and reengages when ground distance exceeds the
+upper bracket or `EngageOverrideTime` elapses. Defaults observed: bracket
+50m-250m, wait 15s, attack altitude 0m, minimum/cruise 20m/75m.
+
+`BehaviourBombingRun` is vanilla "Attack run 2.0 (with U-turn)". It tracks
+`RunActive`, `LastRunFinishedAt`, and an abort timer. While active it attacks
+until below `BreakoffDistance`, below `BreakoffAltitude`, or past `AbortTime`
+after entering `AbortTimeStartDistance`. While inactive it reengages past
+`ReengageDistance` or after `ReengageTime`. It points at the target during the
+run, pitch-locks when close and within about 10 degrees azimuth, and otherwise
+uses the behaviour altitude setting. Defaults observed: breakoff 400m,
+reengage 1000m/15s, pitch-to-target 800m, abort 20s from 0m, breakoff altitude
+-1000m, preferred altitude commonly 200m from the bombing plane card.
+
+`BehaviourAircraft` is vanilla "Attack run 3.0 (combines 1.0 and 2.0)". It
+shares the 2.0 breakoff/reengage/abort shape, adds `EngagementAltitude`,
+`IgnoreAltitude`, `UsePrediction`, `PointDirect`, and `Flyover`, and can choose
+between U-turn and flyover flee behaviour. Defaults observed: engagement
+altitude 100m above target, prediction off, point-direct 400m, flyover off,
+ignore altitude on.
+
+`ManoeuvreAirplane` always requests forward thrust, uses idle thrust only near
+placeholder/idling distance, controls altitude through hover output, and uses
+pitch/yaw/roll differently during banking turns. `FtdAerialMovement` is the
+older Airplane 1.0 manoeuvre: it always thrusts forward, yaw-turns at smaller
+azimuth, bank-turns above its upper azimuth threshold, and uses hover/pitch/yaw
+to change altitude.
+
+CombatManager V2.2 mirrors the attack/flee state machines and their public
+scalar defaults, then feeds the resulting altitude into the sandbox movement
+model. The following remain approximate: vanilla PID outputs, exact roll/pitch
+coupling, predictive interception math, waypoint relocation/path adjustment,
+terrain/sea-surface safety, and propulsion/drag/block-layout physics.
 | `AIFrontalHoverCard` | `BehaviourPointAndMaintainDistance` | `ManoeuvreHover` | Point at and hold range |
 | `AIBombingPlaneCard` | `BehaviourBombingRun` | `ManoeuvreAirplane` | Out of V1.3 scope |
 | `AIBombingHoverCard` | `BehaviourBombingRun` | `ManoeuvreHover` | Out of V1.3 scope |

@@ -54,6 +54,12 @@ namespace CombatManager.Ai
                 -direction.x * sin + direction.z * cos).normalized;
         }
 
+        internal static float HeadingYaw(Vector3 direction)
+        {
+            direction = SafePlanarDirection(Vector3.zero, direction, Vector3.forward);
+            return SignedPlanarAngle(Vector3.forward, direction);
+        }
+
         internal static Vector2 Xz(Vector3 value) => new Vector2(value.x, value.z);
 
         internal static float ClampFinite(float value, float fallback = 0f)

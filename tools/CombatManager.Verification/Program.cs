@@ -24,6 +24,10 @@ namespace CombatManager.Verification
                 ZoomScalesMetersPerPixelAndClamps();
                 FitDuelResetsZoomAndFreecamOrigin();
                 GraphDetailModesSetExpectedVisibility();
+                Scene3DProjectionKeepsRedCentered();
+                Scene3DProjectionShowsAltitude();
+                Begin3DPanSwitchesToFreecam3D();
+                VerticalScaleChangesProjectedAltitude();
                 SimultaneousDuelStepIsMirrorStable();
                 BothEntitiesPlanIndependently();
                 CirclePlannerSeparatesRawSteerFromMotionPoint();
@@ -31,6 +35,12 @@ namespace CombatManager.Verification
                 HoverAzimuthLimitReducesMovement();
                 SixAxisMovesAndFacesWithLookAhead();
                 AirplaneMaintainsForwardSpeed();
+                AirplaneAltitudeMovesTowardAttackIntent();
+                HoverAltitudeMovesTowardDesiredPoint();
+                ShipAltitudeRemainsSurfaceClamped();
+                AttackRunOneSwitchesToFleeAndReengages();
+                AttackRunTwoSwitchesToFleeAndReengages();
+                AttackRunThreeUsesEngagementAltitudeWhileApproaching();
                 ScenarioPresetsApplyBothMainframes();
                 BuildDuelFrameDoesNotMutateNavalState();
                 AutoBroadsideSideDoesNotFlickerNearWrap();
@@ -196,6 +206,61 @@ namespace CombatManager.Verification
                 throw new InvalidOperationException("debug graph detail mode did not enable all graph layers");
         }
 
+        private static void Scene3DProjectionKeepsRedCentered()
+        {
+            var state = new AiSimulationState();
+            state.ApplyScenarioPreset(AiScenarioPreset.PlaneIntercept);
+            state.SetGraphDimensionMode(AiGraphDimensionMode.Scene3D);
+            state.Step(1f);
+
+            Rect rect = new Rect(0f, 0f, 960f, 540f);
+            AiSimulation3DProjection projection = AiSimulation3DProjection.For(rect, state);
+            Vector2 red = projection.WorldToScreen(state.Red.Position);
+            AssertNear(rect.center.x, red.x, "3d red centered x");
+            AssertNear(rect.center.y, red.y, "3d red centered y");
+        }
+
+        private static void Scene3DProjectionShowsAltitude()
+        {
+            var state = new AiSimulationState();
+            state.SetGraphDimensionMode(AiGraphDimensionMode.Scene3D);
+            state.SetGraphVerticalScale(1f);
+            Rect rect = new Rect(0f, 0f, 800f, 600f);
+            AiSimulation3DProjection projection = AiSimulation3DProjection.For(rect, state);
+            Vector2 ground = projection.RelativeToScreen(Vector3.zero);
+            Vector2 altitude = projection.RelativeToScreen(new Vector3(0f, 200f, 0f));
+            if (altitude.y >= ground.y)
+                throw new InvalidOperationException($"3d altitude did not move upward on screen: ground {ground.y}, altitude {altitude.y}");
+        }
+
+        private static void Begin3DPanSwitchesToFreecam3D()
+        {
+            var state = new AiSimulationState();
+            state.ApplyScenarioPreset(AiScenarioPreset.ShipDuel);
+            Vector3 red = state.Red.Position;
+            state.Begin3DPan();
+
+            if (state.GraphDimensionMode != AiGraphDimensionMode.Scene3D)
+                throw new InvalidOperationException("begin pan did not switch to 3D");
+            if (state.GraphViewMode != AiGraphViewMode.Freecam)
+                throw new InvalidOperationException("begin pan did not switch to freecam");
+            AssertNear(red.x, state.FreecamOrigin.x, "3d pan freecam x");
+            AssertNear(red.z, state.FreecamOrigin.z, "3d pan freecam z");
+        }
+
+        private static void VerticalScaleChangesProjectedAltitude()
+        {
+            var state = new AiSimulationState();
+            state.SetGraphDimensionMode(AiGraphDimensionMode.Scene3D);
+            Rect rect = new Rect(0f, 0f, 800f, 600f);
+            state.SetGraphVerticalScale(0.2f);
+            float low = AiSimulation3DProjection.For(rect, state).RelativeToScreen(new Vector3(0f, 400f, 0f)).y;
+            state.SetGraphVerticalScale(1.2f);
+            float high = AiSimulation3DProjection.For(rect, state).RelativeToScreen(new Vector3(0f, 400f, 0f)).y;
+            if (high >= low)
+                throw new InvalidOperationException($"vertical scale did not increase altitude separation: low {low}, high {high}");
+        }
+
         private static void SimultaneousDuelStepIsMirrorStable()
         {
             var state = new AiSimulationState();
@@ -304,6 +369,94 @@ namespace CombatManager.Verification
                 throw new InvalidOperationException($"red airplane fell below minimum speed: {state.Red.CraftCurrentSpeed}");
         }
 
+        private static void AirplaneAltitudeMovesTowardAttackIntent()
+        {
+            var state = new AiSimulationState();
+            state.ApplyScenarioPreset(AiScenarioPreset.AerialAttackRun);
+            state.Blue.Position = new Vector3(state.Blue.Position.x, 50f, state.Blue.Position.z);
+            state.Blue.AttackRunActive = true;
+            state.Blue.AttackRunEngagementAltitude = 300f;
+            float before = state.Blue.Position.y;
+            for (int i = 0; i < 8; i++)
+                state.Step(0.5f);
+            if (state.Blue.Position.y <= before + 1f)
+                throw new InvalidOperationException($"airplane altitude did not climb toward attack intent: {before} -> {state.Blue.Position.y}");
+        }
+
+        private static void HoverAltitudeMovesTowardDesiredPoint()
+        {
+            var state = new AiSimulationState();
+            state.ApplyScenarioPreset(AiScenarioPreset.HoverDuel);
+            state.Blue.ApplyCraftProfile(AiCraftProfile.Hovercraft);
+            state.Blue.Preset = AiSimulationPreset.PointAt;
+            state.Blue.Altitude = 300f;
+            state.Blue.Position = new Vector3(state.Blue.Position.x, 20f, state.Blue.Position.z);
+            float before = state.Blue.Position.y;
+            for (int i = 0; i < 6; i++)
+                state.Step(0.5f);
+            if (state.Blue.Position.y <= before + 1f)
+                throw new InvalidOperationException($"hover altitude did not move upward: {before} -> {state.Blue.Position.y}");
+        }
+
+        private static void ShipAltitudeRemainsSurfaceClamped()
+        {
+            var state = new AiSimulationState();
+            state.ApplyScenarioPreset(AiScenarioPreset.ShipDuel);
+            state.Blue.Position = new Vector3(state.Blue.Position.x, 250f, state.Blue.Position.z);
+            state.Step(0.5f);
+            AssertNear(state.Blue.Altitude, state.Blue.Position.y, "ship altitude clamp");
+        }
+
+        private static void AttackRunOneSwitchesToFleeAndReengages()
+        {
+            var state = new AiSimulationState();
+            state.Blue.ApplyCraftProfile(AiCraftProfile.Airplane);
+            state.Red.ApplyCraftProfile(AiCraftProfile.SurfaceShip);
+            state.Blue.Preset = AiSimulationPreset.AttackRun1;
+            state.Blue.AttackRunAbortDistance = 80f;
+            state.Blue.AttackRunBeginDistance = 200f;
+            state.Blue.AttackRunWaitTime = 2f;
+            state.ResetScenario();
+            state.Blue.Position = new Vector3(40f, state.Blue.Position.y, 0f);
+            state.Step(0.1f);
+            if (state.Blue.AttackRunActive)
+                throw new InvalidOperationException("attack run 1 did not switch to flee inside abort distance");
+            state.Blue.Position = new Vector3(300f, state.Blue.Position.y, 0f);
+            state.Step(0.1f);
+            if (!state.Blue.AttackRunActive)
+                throw new InvalidOperationException("attack run 1 did not reengage outside begin distance");
+        }
+
+        private static void AttackRunTwoSwitchesToFleeAndReengages()
+        {
+            var state = new AiSimulationState();
+            state.ApplyScenarioPreset(AiScenarioPreset.AerialAttackRun);
+            state.Blue.Preset = AiSimulationPreset.AttackRun2;
+            state.Blue.AttackRunBreakoffDistance = 100f;
+            state.Blue.AttackRunReengageDistance = 300f;
+            state.Blue.Position = new Vector3(50f, state.Blue.Position.y, 0f);
+            state.Step(0.1f);
+            if (state.Blue.AttackRunActive)
+                throw new InvalidOperationException("attack run 2 did not break off");
+            state.Blue.Position = new Vector3(500f, state.Blue.Position.y, 0f);
+            state.Step(0.1f);
+            if (!state.Blue.AttackRunActive)
+                throw new InvalidOperationException("attack run 2 did not reengage");
+        }
+
+        private static void AttackRunThreeUsesEngagementAltitudeWhileApproaching()
+        {
+            var state = new AiSimulationState();
+            state.ApplyScenarioPreset(AiScenarioPreset.AerialAttackRun);
+            state.Blue.Preset = AiSimulationPreset.AttackRun3;
+            state.Blue.AttackRunActive = true;
+            state.Blue.AttackRunPitchDistance = 300f;
+            state.Blue.AttackRunEngagementAltitude = 180f;
+            state.Blue.Position = new Vector3(800f, 50f, 0f);
+            AiSimulationFrame frame = state.BuildDuelFrame().Blue;
+            AssertNear(state.Red.Position.y + 180f, frame.MotionPoint.y, "attack run 3 engagement altitude");
+        }
+
         private static void ScenarioPresetsApplyBothMainframes()
         {
             var state = new AiSimulationState();
@@ -314,6 +467,10 @@ namespace CombatManager.Verification
             state.ApplyScenarioPreset(AiScenarioPreset.PlaneIntercept);
             if (state.Blue.CraftMovementModel != AiCraftMovementModel.Airplane || state.Red.CraftMovementModel != AiCraftMovementModel.Airplane)
                 throw new InvalidOperationException("plane intercept did not set both entities to airplane movement");
+
+            state.ApplyScenarioPreset(AiScenarioPreset.AerialAttackRun);
+            if (state.Blue.Preset != AiSimulationPreset.AttackRun3 || state.Red.Preset != AiSimulationPreset.AttackRun2)
+                throw new InvalidOperationException("aerial attack did not set attack-run behaviours");
         }
 
         private static void BuildDuelFrameDoesNotMutateNavalState()

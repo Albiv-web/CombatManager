@@ -25,7 +25,7 @@ namespace CombatManager.Ai
                 HasEnoughRoutineCapacity = true
             };
 
-            plan.Warnings.Add("Preview only: V1.8 does not write to real mainframes, cards, or craft AI state.");
+            plan.Warnings.Add("Preview only: CombatManager does not write to real mainframes, cards, or craft AI state yet.");
             foreach (string warning in blueprint.Warnings)
                 plan.Warnings.Add(warning);
 
@@ -71,6 +71,12 @@ namespace CombatManager.Ai
             plan.Mutations.Add($"Set broadside angle {blueprint.BroadsideAngle:0.#} deg and circle minimum approach {blueprint.CircleMinApproachAngle:0.#} deg");
             plan.Mutations.Add($"Set movement speed {blueprint.CraftSpeed:0.#}m/s, acceleration {blueprint.CraftAcceleration:0.#}m/s2, turn {blueprint.CraftTurnRate:0.#}deg/s");
             plan.Mutations.Add($"Set altitude {blueprint.Altitude:0.#}m and adjustment reference {blueprint.AltitudeReference}");
+            if (blueprint.Behaviour == AiSimulationPreset.AttackRun1)
+                plan.Mutations.Add($"Set Attack Run 1.0 begin {blueprint.AttackRunBeginDistance:0.#}m, abort {blueprint.AttackRunAbortDistance:0.#}m, attack altitude {blueprint.AttackRunAttackAltitude:0.#}m, flee altitude {blueprint.AttackRunDisengageAltitude:0.#}m");
+            if (blueprint.Behaviour == AiSimulationPreset.AttackRun2 || blueprint.Behaviour == AiSimulationPreset.AttackRun3)
+                plan.Mutations.Add($"Set attack-run breakoff {blueprint.AttackRunBreakoffDistance:0.#}m, pitch distance {blueprint.AttackRunPitchDistance:0.#}m, reengage {blueprint.AttackRunReengageDistance:0.#}m/{blueprint.AttackRunReengageTime:0.#}s, flee altitude {blueprint.AttackRunCombatAltitude:0.#}m");
+            if (blueprint.Behaviour == AiSimulationPreset.AttackRun3)
+                plan.Mutations.Add($"Set Attack Run 3.0 engagement altitude {blueprint.AttackRunEngagementAltitude:0.#}m, prediction {blueprint.AttackRunUsePrediction}, flyover {blueprint.AttackRunFlyover}, ignore altitude {blueprint.AttackRunIgnoreAltitude}");
             plan.Mutations.Add($"Set adjustment clearance land {blueprint.MinimumAltitudeAboveLand:0.#}m, water {blueprint.MinimumAltitudeAboveWater:0.#}m, max {blueprint.MaximumAltitude:0.#}m");
             plan.Mutations.Add($"Set path defaults water depth {blueprint.WaterDepthRequired:0.#}m, land height {blueprint.LandHeightRequired:0.#}m, turning circle {blueprint.TurningCircle:0.#}m");
 

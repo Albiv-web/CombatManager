@@ -19,6 +19,25 @@ namespace CombatManager.Ai
         internal float BroadsideAngle;
         internal float CircleMinApproachAngle;
         internal float CraftSpeed;
+        internal float PreferredAltitude;
+        internal float SimulationTime;
+        internal bool AttackRunActive;
+        internal float AttackRunBeginDistance;
+        internal float AttackRunAbortDistance;
+        internal float AttackRunWaitTime;
+        internal float AttackRunAttackAltitude;
+        internal float AttackRunDisengageAltitude;
+        internal float AttackRunBreakoffDistance;
+        internal float AttackRunReengageDistance;
+        internal float AttackRunReengageTime;
+        internal float AttackRunPitchDistance;
+        internal float AttackRunBreakoffAltitude;
+        internal float AttackRunCombatAltitude;
+        internal float AttackRunEngagementAltitude;
+        internal float AttackRunPredictionPoint;
+        internal float AttackRunFlyAwayYaw;
+        internal bool AttackRunUsePrediction;
+        internal bool AttackRunFlyover;
     }
 
     internal struct AiBehaviourPlan
@@ -59,8 +78,73 @@ namespace CombatManager.Ai
                     return PlanBroadside(input, target);
                 case AiSimulationPreset.NavalBroadside:
                     return PlanNavalBroadside(input, target);
+                case AiSimulationPreset.AttackRun1:
+                    return PlanAttackRun1(input, target);
+                case AiSimulationPreset.AttackRun2:
+                    return PlanAttackRun2(input, target, aircraft30: false);
+                case AiSimulationPreset.AttackRun3:
+                    return PlanAttackRun2(input, target, aircraft30: true);
                 default:
                     return PlanCircle(input, target);
+            }
+        }
+
+        internal static void AdvanceAerialState(AiSimEntity entity, AiPlanInput input)
+        {
+            PlannerTargetInfo target = BuildTargetInfo(input);
+            if (input.Preset == AiSimulationPreset.AttackRun1)
+            {
+                if (entity.AttackRunActive)
+                {
+                    if (target.GroundDistance < Mathf.Max(1f, entity.AttackRunAbortDistance))
+                    {
+                        entity.AttackRunActive = false;
+                        entity.AttackRunLastFinishedAt = input.SimulationTime;
+                        entity.AttackRunFlyAwayYaw = PlanarMath.HeadingYaw(input.CraftHeading);
+                    }
+                }
+                else if (target.GroundDistance > Mathf.Max(entity.AttackRunAbortDistance + 1f, entity.AttackRunBeginDistance) ||
+                    input.SimulationTime - entity.AttackRunLastFinishedAt > Mathf.Max(0f, entity.AttackRunWaitTime))
+                {
+                    entity.AttackRunActive = true;
+                }
+
+                return;
+            }
+
+            if (input.Preset != AiSimulationPreset.AttackRun2 && input.Preset != AiSimulationPreset.AttackRun3)
+                return;
+
+            float range = input.Preset == AiSimulationPreset.AttackRun3 && !entity.AttackRunIgnoreAltitude
+                ? target.Range
+                : target.GroundDistance;
+            if (entity.AttackRunActive)
+            {
+                if (range < Mathf.Max(1f, entity.AttackRunBreakoffDistance) || input.CraftPosition.y < entity.AttackRunBreakoffAltitude)
+                {
+                    entity.AttackRunActive = false;
+                    entity.AttackRunLastFinishedAt = input.SimulationTime;
+                    entity.AttackRunFlyAwayYaw = PlanarMath.HeadingYaw(input.CraftHeading);
+                }
+                else if (!float.IsPositiveInfinity(entity.AttackRunAbortTimerStart) &&
+                    input.SimulationTime - entity.AttackRunAbortTimerStart > Mathf.Max(0f, entity.AttackRunAbortTime))
+                {
+                    entity.AttackRunActive = false;
+                    entity.AttackRunLastFinishedAt = input.SimulationTime;
+                    entity.AttackRunFlyAwayYaw = PlanarMath.HeadingYaw(input.CraftHeading);
+                }
+
+                if (float.IsPositiveInfinity(entity.AttackRunAbortTimerStart) &&
+                    range < Mathf.Max(0f, entity.AttackRunAbortTimerStartDistance))
+                {
+                    entity.AttackRunAbortTimerStart = input.SimulationTime;
+                }
+            }
+            else if (range > Mathf.Max(1f, entity.AttackRunReengageDistance) ||
+                input.SimulationTime - entity.AttackRunLastFinishedAt > Mathf.Max(0f, entity.AttackRunReengageTime))
+            {
+                entity.AttackRunActive = true;
+                entity.AttackRunAbortTimerStart = float.PositiveInfinity;
             }
         }
 
@@ -89,6 +173,7 @@ namespace CombatManager.Ai
             float approachAngle = GetCircleApproachAngle(input, target);
             Vector3 desiredTravel = PlanarMath.RotateYaw(target.DirectionFlat, approachAngle);
             Vector3 rawSteer = input.CraftPosition + desiredTravel * 1000f;
+            rawSteer.y = input.PreferredAltitude;
             Vector3 motionPoint = BuildCircleMotionPoint(input, target, desiredTravel);
             return BuildCommonPlan(
                 input,
@@ -110,7 +195,7 @@ namespace CombatManager.Ai
         {
             float distance = Mathf.Max(10f, input.Radius);
             Vector3 rawSteer = input.TargetPosition - target.DirectionFlat * distance;
-            rawSteer.y = input.CraftPosition.y;
+            rawSteer.y = input.PreferredAltitude;
             Vector3 moveDirection = PlanarMath.SafePlanarDirection(input.CraftPosition, rawSteer, input.CraftHeading);
             float moveAngle = Mathf.Abs(PlanarMath.SignedPlanarAngle(input.CraftHeading, moveDirection));
             bool reversePreferred = target.GroundDistance < distance && moveAngle > 120f;
@@ -202,6 +287,121 @@ namespace CombatManager.Ai
                 reversePreferred: false);
         }
 
+        private static AiBehaviourPlan PlanAttackRun1(AiPlanInput input, PlannerTargetInfo target)
+        {
+            if (input.AttackRunActive)
+            {
+                Vector3 aimPoint = input.TargetPosition;
+                aimPoint.y = input.TargetPosition.y + input.AttackRunAttackAltitude;
+                Vector3 facing = PlanarMath.SafePlanarDirection(input.CraftPosition, input.TargetPosition, input.CraftHeading);
+                return BuildCommonPlan(
+                    input,
+                    target,
+                    aimPoint,
+                    aimPoint,
+                    facing,
+                    facing,
+                    "Attack run 1.0",
+                    $"Attack flyover below {input.AttackRunAbortDistance:0.#}m",
+                    "mirrors Attack Run 1.0 towards/fly-away state; adjuster and pitch PID are approximated",
+                    approximate: true,
+                    state: $"attack altitude {aimPoint.y:0.#}m",
+                    broadsideAngle: 0f,
+                    reversePreferred: false);
+            }
+
+            Vector3 fleeDirection = PlanarMath.RotateYaw(Vector3.forward, input.AttackRunFlyAwayYaw);
+            Vector3 fleePoint = input.CraftPosition + fleeDirection * 250f;
+            fleePoint.y = input.AttackRunDisengageAltitude;
+            return BuildCommonPlan(
+                input,
+                target,
+                fleePoint,
+                fleePoint,
+                fleeDirection,
+                fleeDirection,
+                "Attack run 1.0",
+                $"Fly away until {input.AttackRunBeginDistance:0.#}m or {input.AttackRunWaitTime:0.#}s",
+                "fly-away bearing is sandbox-held from current heading; adjuster and pitch PID are approximated",
+                approximate: true,
+                state: $"flee altitude {fleePoint.y:0.#}m",
+                broadsideAngle: 0f,
+                reversePreferred: false);
+        }
+
+        private static AiBehaviourPlan PlanAttackRun2(AiPlanInput input, PlannerTargetInfo target, bool aircraft30)
+        {
+            Vector3 facingToTarget = PlanarMath.SafePlanarDirection(input.CraftPosition, input.TargetPosition, input.CraftHeading);
+            Vector3 awayFromTarget = -facingToTarget;
+            float chosenAltitude;
+            Vector3 motionPoint;
+            Vector3 facing;
+            string state;
+
+            if (input.AttackRunActive)
+            {
+                facing = facingToTarget;
+                Vector3 aimTarget = input.TargetPosition;
+                if (aircraft30 && input.AttackRunUsePrediction && target.GroundDistance > input.AttackRunPredictionPoint)
+                    aimTarget += input.TargetVelocity * Mathf.Clamp(target.GroundDistance / Mathf.Max(1f, input.CraftSpeed), 0f, 8f);
+
+                motionPoint = input.CraftPosition + facing * 100f;
+                if (aircraft30 && target.GroundDistance > input.AttackRunPitchDistance)
+                    chosenAltitude = input.TargetPosition.y + input.AttackRunEngagementAltitude;
+                else if (!aircraft30 && target.GroundDistance > input.AttackRunPitchDistance)
+                    chosenAltitude = input.AttackRunCombatAltitude;
+                else
+                    chosenAltitude = input.CraftPosition.y;
+                motionPoint.y = chosenAltitude;
+                aimTarget.y = chosenAltitude;
+                state = target.GroundDistance <= input.AttackRunPitchDistance
+                    ? "attack, pitch locked near target"
+                    : $"attack altitude {chosenAltitude:0.#}m";
+
+                return BuildCommonPlan(
+                    input,
+                    target,
+                    aimTarget,
+                    motionPoint,
+                    facing,
+                    facing,
+                    aircraft30 ? "Attack run 3.0" : "Attack run 2.0",
+                    $"Attack until {input.AttackRunBreakoffDistance:0.#}m",
+                    aircraft30
+                        ? "mirrors Aircraft 3.0 attack/flee states; interception, adjustment, and PID are approximated"
+                        : "mirrors BombingRun 2.0 attack/flee states; adjustment and pitch PID are approximated",
+                    approximate: true,
+                    state: state,
+                    broadsideAngle: 0f,
+                    reversePreferred: false);
+            }
+
+            facing = aircraft30 && input.AttackRunFlyover
+                ? PlanarMath.RotateYaw(Vector3.forward, input.AttackRunFlyAwayYaw)
+                : awayFromTarget;
+            motionPoint = input.CraftPosition + facing * 100f;
+            chosenAltitude = input.AttackRunCombatAltitude;
+            motionPoint.y = chosenAltitude;
+            state = $"flee until {input.AttackRunReengageDistance:0.#}m or {input.AttackRunReengageTime:0.#}s";
+
+            return BuildCommonPlan(
+                input,
+                target,
+                motionPoint,
+                motionPoint,
+                facing,
+                facing,
+                aircraft30 ? "Attack run 3.0" : "Attack run 2.0",
+                state,
+                aircraft30
+                    ? "mirrors Aircraft 3.0 flee phase; run-away adjuster and prediction are approximated"
+                    : "mirrors BombingRun 2.0 flee phase; run-away adjuster is approximated",
+                approximate: true,
+                state: $"flee altitude {chosenAltitude:0.#}m",
+                broadsideAngle: 0f,
+                reversePreferred: false);
+        }
+
         private static AiBehaviourPlan BuildCommonPlan(
             AiPlanInput input,
             PlannerTargetInfo target,
@@ -263,7 +463,7 @@ namespace CombatManager.Ai
             float radius = Mathf.Max(10f, input.Radius);
             float lookAhead = Mathf.Clamp(Mathf.Max(90f, input.CraftSpeed * 3f), 90f, Mathf.Max(120f, radius * 0.8f));
             Vector3 point = input.TargetPosition + fromTarget * radius + motionDirection * lookAhead;
-            point.y = input.CraftPosition.y;
+            point.y = input.PreferredAltitude;
             return point;
         }
 

@@ -24,10 +24,17 @@ namespace CombatManager.Ui
 
             GUI.BeginGroup(rect);
             Rect grid = new Rect(8f, 8f, rect.width - 16f, rect.height - 16f);
-            AiSimulationGridProjection projection = AiSimulationGridProjection.For(grid, state);
             AiDuelFrame frame = state.BuildDuelFrame();
             var labels = new List<Rect>();
 
+            if (state.GraphDimensionMode == AiGraphDimensionMode.Scene3D)
+            {
+                Draw3D(grid, state, frame, labels);
+                GUI.EndGroup();
+                return;
+            }
+
+            AiSimulationGridProjection projection = AiSimulationGridProjection.For(grid, state);
             DrawGrid(projection);
             DrawOrbit(projection, grid, labels, frame.Blue.TargetPosition, frame.Blue.Radius, BlueOrbit, "Blue range");
             DrawOrbit(projection, grid, labels, frame.Red.TargetPosition, frame.Red.Radius, RedOrbit, "Red range");
@@ -50,13 +57,56 @@ namespace CombatManager.Ui
             DrawEntity(projection, grid, labels, state, frame.Red, Red, "Red");
 
             DrawLabel(labels, grid, new Vector2(grid.x + 10f, grid.y + 10f), $"{frame.Blue.Kind} vs {frame.Red.Kind} | range {frame.Blue.GroundRange:0.#}m", allowSkip: false);
-            DrawScaleBar(projection, grid, labels, state.GridZoom);
+            DrawScaleBar(projection.MetersPerPixel, grid, labels, state.GridZoom);
 
             if (state.ShowLegend)
                 DrawLegend(grid);
 
             DrawBorder(grid);
             GUI.EndGroup();
+        }
+
+        private static void Draw3D(Rect grid, AiSimulationState state, AiDuelFrame frame, List<Rect> labels)
+        {
+            Texture scene = CombatManager3DScene.Shared.Render(grid, state, frame);
+            GUI.DrawTexture(grid, scene, ScaleMode.StretchToFill, alphaBlend: false);
+
+            AiSimulation3DProjection projection = AiSimulation3DProjection.For(grid, state);
+            Draw3DEntityLabels(projection, grid, labels, frame.Blue, "Blue");
+            Draw3DEntityLabels(projection, grid, labels, frame.Red, "Red");
+            DrawLabel(
+                labels,
+                grid,
+                new Vector2(grid.x + 10f, grid.y + 10f),
+                $"{frame.Blue.Kind} vs {frame.Red.Kind} | range {frame.Blue.GroundRange:0.#}m | 3D altitude x{state.GraphVerticalScale:0.##}",
+                allowSkip: false);
+            DrawScaleBar(projection.MetersPerPixel, grid, labels, state.GridZoom);
+
+            if (state.ShowLegend)
+                DrawLegend(grid);
+
+            DrawBorder(grid);
+        }
+
+        private static void Draw3DEntityLabels(
+            AiSimulation3DProjection projection,
+            Rect grid,
+            List<Rect> labels,
+            AiSimulationFrame frame,
+            string label)
+        {
+            Vector2 craft = projection.WorldToScreen(frame.CraftPosition);
+            DrawLabel(
+                labels,
+                grid,
+                craft + new Vector2(14f, -16f),
+                $"{label}: {frame.Kind} {frame.GroundRange:0.#}m alt {frame.CraftPosition.y:0.#}m",
+                allowSkip: true);
+            if (frame.HasMotionPoint)
+            {
+                Vector2 motion = projection.WorldToScreen(frame.MotionPoint);
+                DrawLabel(labels, grid, motion + new Vector2(10f, 8f), $"intent {frame.MotionPoint.y:0.#}m", allowSkip: true);
+            }
         }
 
         private static void DrawEntity(
@@ -228,16 +278,16 @@ namespace CombatManager.Ui
             GUI.Label(new Rect(x + 25f, y - 3f, 120f, 20f), label, CombatManagerTheme.GridLabel);
         }
 
-        private static void DrawScaleBar(AiSimulationGridProjection projection, Rect grid, List<Rect> labels, float zoom)
+        private static void DrawScaleBar(float metersPerPixel, Rect grid, List<Rect> labels, float zoom)
         {
-            float meters = NiceLengthBelow(projection.MetersPerPixel * 160f);
-            float pixels = meters / Mathf.Max(0.001f, projection.MetersPerPixel);
+            float meters = NiceLengthBelow(metersPerPixel * 160f);
+            float pixels = meters / Mathf.Max(0.001f, metersPerPixel);
             Vector2 start = new Vector2(grid.x + 18f, grid.yMax - 34f);
             Vector2 end = start + new Vector2(pixels, 0f);
             DrawLine(start, end, GridMajor, 3f);
             DrawLine(start + new Vector2(0f, -6f), start + new Vector2(0f, 6f), GridMajor, 2f);
             DrawLine(end + new Vector2(0f, -6f), end + new Vector2(0f, 6f), GridMajor, 2f);
-            DrawLabel(labels, grid, start + new Vector2(0f, -26f), $"{meters:0.#}m  |  {projection.MetersPerPixel:0.##} m/px  |  {zoom:0.##}x", allowSkip: false);
+            DrawLabel(labels, grid, start + new Vector2(0f, -26f), $"{meters:0.#}m  |  {metersPerPixel:0.##} m/px  |  {zoom:0.##}x", allowSkip: false);
         }
 
         private static float NiceLength(float raw)

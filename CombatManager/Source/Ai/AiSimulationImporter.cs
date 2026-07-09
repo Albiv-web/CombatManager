@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using BrilliantSkies.Ai.Interfaces;
 using BrilliantSkies.Ai.Modules.Behaviour;
 using BrilliantSkies.Ai.Modules.Behaviour.Examples;
+using BrilliantSkies.Ai.Modules.Behaviour.Examples.Ftd;
 using BrilliantSkies.Ai.Modules.Manoeuvre;
 using BrilliantSkies.Ai.Modules.Manoeuvre.Examples;
 using BrilliantSkies.Ai.Modules.Manoeuvre.Examples.Ftd;
@@ -155,7 +156,10 @@ namespace CombatManager.Ai
             return behaviour is BehaviourCircleAtDistance
                 || behaviour is BehaviourPointAndMaintainDistance
                 || behaviour is FtdNaval
-                || behaviour is BehaviourBroadside;
+                || behaviour is BehaviourBroadside
+                || behaviour is FtdAerial
+                || behaviour is BehaviourBombingRun
+                || behaviour is BehaviourAircraft;
         }
 
         private static bool TryImportMainframe(AIMainframe mainframe, AiSimulationState state, out string message)
@@ -229,6 +233,36 @@ namespace CombatManager.Ai
                 state.ImportedParameters.Add($"angle {broadside.AngleToMaintain.Us:0.#} deg");
                 state.ImportedParameters.Add($"distance {broadside.DistanceToMaintain.Lower:0.#}-{broadside.DistanceToMaintain.Upper:0.#}m");
             }
+            else if (behaviour is FtdAerial aerial)
+            {
+                blueprint.Behaviour = AiSimulationPreset.AttackRun1;
+                blueprint.Radius = aerial.BombingRunRangeBracket.Upper;
+                blueprint.AttackRunAbortDistance = aerial.BombingRunRangeBracket.Lower;
+                blueprint.AttackRunBeginDistance = aerial.BombingRunRangeBracket.Upper;
+                blueprint.AttackRunWaitTime = aerial.EngageOverrideTime.Us;
+                blueprint.AttackRunAttackAltitude = aerial.FlyoverHeight.Us;
+                blueprint.AttackRunDisengageAltitude = aerial.MinimumAndCruiseAltitude.Upper;
+                state.ImportedParameters.Add($"attack run 1 bracket {aerial.BombingRunRangeBracket.Lower:0.#}-{aerial.BombingRunRangeBracket.Upper:0.#}m");
+                state.ImportedParameters.Add($"attack altitude {aerial.FlyoverHeight.Us:0.#}m, flee altitude {aerial.MinimumAndCruiseAltitude.Upper:0.#}m");
+            }
+            else if (behaviour is BehaviourAircraft aircraft)
+            {
+                blueprint.Behaviour = AiSimulationPreset.AttackRun3;
+                ApplyAircraftFields(aircraft, blueprint, state.ImportedParameters);
+                blueprint.AttackRunEngagementAltitude = aircraft.EngagementAltitude.Us;
+                blueprint.AttackRunUsePrediction = aircraft.UsePrediction.Us;
+                blueprint.AttackRunFlyover = aircraft.Flyover.Us;
+                blueprint.AttackRunIgnoreAltitude = aircraft.IgnoreAltitude.Us;
+                blueprint.AttackRunPredictionPoint = aircraft.PointDirect.Us;
+                state.ImportedParameters.Add($"engagement altitude {aircraft.EngagementAltitude.Us:0.#}m, prediction {aircraft.UsePrediction.Us}");
+            }
+            else if (behaviour is BehaviourBombingRun bombing)
+            {
+                blueprint.Behaviour = AiSimulationPreset.AttackRun2;
+                ApplyBombingRunFields(bombing, blueprint, state.ImportedParameters);
+                blueprint.AttackRunCombatAltitude = bombing.PreferredAltitude.Us;
+                state.ImportedParameters.Add($"combat altitude {bombing.PreferredAltitude.Us:0.#}m");
+            }
             else
             {
                 message = $"Unsupported behaviour: {behaviour.GetType().Name}.";
@@ -241,6 +275,34 @@ namespace CombatManager.Ai
             state.Reset();
             message = state.ImportStatus;
             return true;
+        }
+
+        private static void ApplyBombingRunFields(BehaviourBombingRun bombing, AiMainframeBlueprint blueprint, List<string> importedParameters)
+        {
+            blueprint.Radius = Mathf.Max(10f, bombing.PitchDistance.Us);
+            blueprint.AttackRunBreakoffDistance = bombing.BreakoffDistance.Us;
+            blueprint.AttackRunReengageDistance = bombing.ReengageDistance.Us;
+            blueprint.AttackRunReengageTime = bombing.ReengageTime.Us;
+            blueprint.AttackRunPitchDistance = bombing.PitchDistance.Us;
+            blueprint.AttackRunBreakoffAltitude = bombing.BreakoffAltitude.Us;
+            blueprint.AttackRunAbortTime = bombing.AbortTime.Us;
+            blueprint.AttackRunAbortTimerStartDistance = bombing.AbortTimeStartDistance.Us;
+            importedParameters.Add($"breakoff {bombing.BreakoffDistance.Us:0.#}m, pitch distance {bombing.PitchDistance.Us:0.#}m");
+            importedParameters.Add($"reengage {bombing.ReengageDistance.Us:0.#}m / {bombing.ReengageTime.Us:0.#}s");
+        }
+
+        private static void ApplyAircraftFields(BehaviourAircraft aircraft, AiMainframeBlueprint blueprint, List<string> importedParameters)
+        {
+            blueprint.Radius = Mathf.Max(10f, aircraft.PitchDistance.Us);
+            blueprint.AttackRunBreakoffDistance = aircraft.BreakoffDistance.Us;
+            blueprint.AttackRunReengageDistance = aircraft.ReengageDistance.Us;
+            blueprint.AttackRunReengageTime = aircraft.ReengageTime.Us;
+            blueprint.AttackRunPitchDistance = aircraft.PitchDistance.Us;
+            blueprint.AttackRunBreakoffAltitude = aircraft.BreakoffAltitude.Us;
+            blueprint.AttackRunAbortTime = aircraft.AbortTime.Us;
+            blueprint.AttackRunAbortTimerStartDistance = aircraft.AbortTimeStartDistance.Us;
+            importedParameters.Add($"breakoff {aircraft.BreakoffDistance.Us:0.#}m, pitch distance {aircraft.PitchDistance.Us:0.#}m");
+            importedParameters.Add($"reengage {aircraft.ReengageDistance.Us:0.#}m / {aircraft.ReengageTime.Us:0.#}s");
         }
 
         private static AiSimulationSide MapSide(SideOptions side)

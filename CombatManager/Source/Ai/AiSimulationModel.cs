@@ -9,7 +9,10 @@ namespace CombatManager.Ai
         Circle,
         PointAt,
         Broadside,
-        NavalBroadside
+        NavalBroadside,
+        AttackRun1,
+        AttackRun2,
+        AttackRun3
     }
 
     internal enum AiSimulationSide
@@ -64,7 +67,8 @@ namespace CombatManager.Ai
         ShipDuel,
         BroadsideDuel,
         HoverDuel,
-        PlaneIntercept
+        PlaneIntercept,
+        AerialAttackRun
     }
 
     internal enum AiEntityRole
@@ -85,6 +89,12 @@ namespace CombatManager.Ai
         Clean,
         Tactical,
         Debug
+    }
+
+    internal enum AiGraphDimensionMode
+    {
+        Flat2D,
+        Scene3D
     }
 
     internal sealed class AiSimEntity
@@ -114,6 +124,7 @@ namespace CombatManager.Ai
         internal float CraftAcceleration { get; set; } = 18f;
         internal float CraftTurnRate { get; set; } = 90f;
         internal float CraftCurrentSpeed { get; set; }
+        internal float VerticalSpeed { get; set; }
         internal float Altitude { get; set; }
 
         internal float ShipTarryDistance { get; set; } = 50f;
@@ -129,6 +140,29 @@ namespace CombatManager.Ai
         internal float AirplaneBankingTurnAbove { get; set; } = 20f;
         internal float AirplaneBankingTurnRoll { get; set; } = 45f;
         internal float AirplanePitchForAltitude { get; set; } = 15f;
+
+        internal bool AttackRunActive { get; set; } = true;
+        internal float AttackRunLastFinishedAt { get; set; }
+        internal float AttackRunAbortTimerStart { get; set; } = float.PositiveInfinity;
+        internal float AttackRunFlyAwayYaw { get; set; }
+        internal float AttackRunBeginDistance { get; set; } = 250f;
+        internal float AttackRunAbortDistance { get; set; } = 50f;
+        internal float AttackRunWaitTime { get; set; } = 15f;
+        internal float AttackRunAttackAltitude { get; set; }
+        internal float AttackRunDisengageAltitude { get; set; } = 75f;
+        internal float AttackRunBreakoffDistance { get; set; } = 400f;
+        internal float AttackRunReengageDistance { get; set; } = 1000f;
+        internal float AttackRunReengageTime { get; set; } = 15f;
+        internal float AttackRunPitchDistance { get; set; } = 800f;
+        internal float AttackRunBreakoffAltitude { get; set; } = -1000f;
+        internal float AttackRunAbortTime { get; set; } = 20f;
+        internal float AttackRunAbortTimerStartDistance { get; set; }
+        internal float AttackRunCombatAltitude { get; set; } = 200f;
+        internal float AttackRunEngagementAltitude { get; set; } = 100f;
+        internal float AttackRunPredictionPoint { get; set; } = 400f;
+        internal bool AttackRunUsePrediction { get; set; }
+        internal bool AttackRunFlyover { get; set; }
+        internal bool AttackRunIgnoreAltitude { get; set; } = true;
 
         internal Vector3 Position { get; set; }
         internal Vector3 Heading { get; set; } = Vector3.forward;
@@ -207,7 +241,12 @@ namespace CombatManager.Ai
             Heading = PlanarMath.SafePlanarDirection(Vector3.zero, heading, Vector3.forward);
             Velocity = Vector3.zero;
             CraftCurrentSpeed = 0f;
+            VerticalSpeed = 0f;
             NavalState = AiSimulationNavalState.Closing;
+            AttackRunActive = true;
+            AttackRunLastFinishedAt = 0f;
+            AttackRunAbortTimerStart = float.PositiveInfinity;
+            AttackRunFlyAwayYaw = PlanarMath.HeadingYaw(Heading);
             Trail.Clear();
             IntentTrail.Clear();
             AddTrailPoint(Position);
@@ -257,6 +296,10 @@ namespace CombatManager.Ai
         internal float SimulationTime { get; private set; }
         internal AiGraphViewMode GraphViewMode { get; private set; } = AiGraphViewMode.RedCentered;
         internal AiGraphDetailMode GraphDetailMode { get; private set; } = AiGraphDetailMode.Tactical;
+        internal AiGraphDimensionMode GraphDimensionMode { get; private set; } = AiGraphDimensionMode.Flat2D;
+        internal float Graph3DYaw { get; private set; } = 35f;
+        internal float Graph3DPitch { get; private set; } = 56f;
+        internal float GraphVerticalScale { get; private set; } = 0.35f;
         internal Vector3 FreecamOrigin { get; private set; }
 
         internal bool Playing { get; set; } = true;
@@ -383,6 +426,45 @@ namespace CombatManager.Ai
                 FreecamOrigin = DuelMidpoint();
         }
 
+        internal void SetGraphDimensionMode(AiGraphDimensionMode mode)
+        {
+            GraphDimensionMode = mode;
+        }
+
+        internal void ResetGraphView()
+        {
+            GraphDimensionMode = AiGraphDimensionMode.Flat2D;
+            GraphViewMode = AiGraphViewMode.RedCentered;
+            Graph3DYaw = 35f;
+            Graph3DPitch = 56f;
+            GraphVerticalScale = 0.35f;
+            SetGridZoom(1f);
+            FreecamOrigin = DuelMidpoint();
+        }
+
+        internal void Begin3DPan()
+        {
+            if (GraphDimensionMode != AiGraphDimensionMode.Scene3D)
+                GraphDimensionMode = AiGraphDimensionMode.Scene3D;
+            if (GraphViewMode != AiGraphViewMode.Freecam)
+            {
+                FreecamOrigin = GraphOriginWorld();
+                GraphViewMode = AiGraphViewMode.Freecam;
+            }
+        }
+
+        internal void RotateGraph3D(Vector2 screenDelta)
+        {
+            GraphDimensionMode = AiGraphDimensionMode.Scene3D;
+            Graph3DYaw = PlanarMath.Fix180(Graph3DYaw + screenDelta.x * 0.25f);
+            Graph3DPitch = Mathf.Clamp(Graph3DPitch - screenDelta.y * 0.18f, 18f, 82f);
+        }
+
+        internal void SetGraphVerticalScale(float scale)
+        {
+            GraphVerticalScale = Mathf.Clamp(scale, 0.05f, 2f);
+        }
+
         internal void SetFreecamOrigin(Vector3 origin)
         {
             FreecamOrigin = new Vector3(origin.x, 0f, origin.z);
@@ -397,6 +479,20 @@ namespace CombatManager.Ai
                 -screenDelta.x * metersPerPixel,
                 0f,
                 screenDelta.y * metersPerPixel);
+        }
+
+        internal void PanFreecam3D(Vector2 screenDelta, float metersPerPixel)
+        {
+            if (GraphViewMode != AiGraphViewMode.Freecam)
+                return;
+
+            float yaw = Graph3DYaw * Mathf.Deg2Rad;
+            Vector3 right = new Vector3(Mathf.Cos(yaw), 0f, -Mathf.Sin(yaw));
+            Vector3 forward = new Vector3(Mathf.Sin(yaw), 0f, Mathf.Cos(yaw));
+            float pitchGroundScale = Mathf.Max(0.2f, Mathf.Sin(Graph3DPitch * Mathf.Deg2Rad));
+            FreecamOrigin +=
+                right * (-screenDelta.x * metersPerPixel) +
+                forward * (screenDelta.y * metersPerPixel / pitchGroundScale);
         }
 
         internal Vector3 GraphOriginWorld()
@@ -432,9 +528,13 @@ namespace CombatManager.Ai
             AiPlanInput redInput = BuildPlannerInput(Red, Blue);
             Blue.NavalState = AiBehaviourPlanner.AdvanceNavalState(blueInput);
             Red.NavalState = AiBehaviourPlanner.AdvanceNavalState(redInput);
+            AiBehaviourPlanner.AdvanceAerialState(Blue, blueInput);
+            AiBehaviourPlanner.AdvanceAerialState(Red, redInput);
 
             blueInput.NavalState = Blue.NavalState;
             redInput.NavalState = Red.NavalState;
+            blueInput.AttackRunActive = Blue.AttackRunActive;
+            redInput.AttackRunActive = Red.AttackRunActive;
             AiSimulationFrame blueFrame = BuildEntityFrame(Blue, Red, blueInput);
             AiSimulationFrame redFrame = BuildEntityFrame(Red, Blue, redInput);
 
@@ -515,6 +615,12 @@ namespace CombatManager.Ai
                     ConfigureAircraft(Blue, AiCraftProfile.Airplane, AiSimulationPreset.PointAt, 450f);
                     ConfigureAircraft(Red, AiCraftProfile.FastAircraft, AiSimulationPreset.Circle, 550f);
                     Red.Side = AiSimulationSide.Left;
+                    break;
+                case AiScenarioPreset.AerialAttackRun:
+                    ConfigureAircraft(Blue, AiCraftProfile.FastAircraft, AiSimulationPreset.AttackRun3, 800f);
+                    ConfigureAircraft(Red, AiCraftProfile.Airplane, AiSimulationPreset.AttackRun2, 700f);
+                    Blue.AttackRunUsePrediction = true;
+                    Red.AttackRunCombatAltitude = 220f;
                     break;
                 case AiScenarioPreset.ShipDuel:
                 default:
@@ -608,6 +714,12 @@ namespace CombatManager.Ai
         {
             switch (preset)
             {
+                case AiSimulationPreset.AttackRun1:
+                    return "Attack 1.0";
+                case AiSimulationPreset.AttackRun2:
+                    return "Attack 2.0";
+                case AiSimulationPreset.AttackRun3:
+                    return "Attack 3.0";
                 case AiSimulationPreset.PointAt:
                     return "Point At";
                 case AiSimulationPreset.Broadside:
@@ -655,6 +767,8 @@ namespace CombatManager.Ai
         {
             switch (preset)
             {
+                case AiScenarioPreset.AerialAttackRun:
+                    return "Aerial attack";
                 case AiScenarioPreset.BroadsideDuel:
                     return "Broadside duel";
                 case AiScenarioPreset.HoverDuel:
@@ -804,7 +918,7 @@ namespace CombatManager.Ai
                 : $"{plan.ApproximationNote}; {movement}";
         }
 
-        private static AiPlanInput BuildPlannerInput(AiSimEntity entity, AiSimEntity target)
+        private AiPlanInput BuildPlannerInput(AiSimEntity entity, AiSimEntity target)
         {
             return new AiPlanInput
             {
@@ -822,7 +936,26 @@ namespace CombatManager.Ai
                 BroadsideOuterRadius = entity.BroadsideOuterRadius,
                 BroadsideAngle = entity.BroadsideAngle,
                 CircleMinApproachAngle = entity.CircleMinApproachAngle,
-                CraftSpeed = entity.CraftSpeed
+                CraftSpeed = entity.CraftSpeed,
+                PreferredAltitude = entity.Altitude,
+                SimulationTime = SimulationTime,
+                AttackRunActive = entity.AttackRunActive,
+                AttackRunBeginDistance = entity.AttackRunBeginDistance,
+                AttackRunAbortDistance = entity.AttackRunAbortDistance,
+                AttackRunWaitTime = entity.AttackRunWaitTime,
+                AttackRunAttackAltitude = entity.AttackRunAttackAltitude,
+                AttackRunDisengageAltitude = entity.AttackRunDisengageAltitude,
+                AttackRunBreakoffDistance = entity.AttackRunBreakoffDistance,
+                AttackRunReengageDistance = entity.AttackRunReengageDistance,
+                AttackRunReengageTime = entity.AttackRunReengageTime,
+                AttackRunPitchDistance = entity.AttackRunPitchDistance,
+                AttackRunBreakoffAltitude = entity.AttackRunBreakoffAltitude,
+                AttackRunCombatAltitude = entity.AttackRunCombatAltitude,
+                AttackRunEngagementAltitude = entity.AttackRunEngagementAltitude,
+                AttackRunPredictionPoint = entity.AttackRunPredictionPoint,
+                AttackRunFlyAwayYaw = entity.AttackRunFlyAwayYaw,
+                AttackRunUsePrediction = entity.AttackRunUsePrediction,
+                AttackRunFlyover = entity.AttackRunFlyover
             };
         }
     }
@@ -923,6 +1056,87 @@ namespace CombatManager.Ai
                 return Vector2.zero;
 
             return new Vector2(flat.x, -flat.z).normalized * pixels;
+        }
+    }
+
+    internal struct AiSimulation3DProjection
+    {
+        internal Rect Rect;
+        internal Vector3 OriginWorld;
+        internal float MetersPerPixel;
+        internal float VisibleRadius;
+        internal float YawDegrees;
+        internal float PitchDegrees;
+        internal float VerticalScale;
+
+        internal static AiSimulation3DProjection For(Rect rect, AiSimulationState state)
+        {
+            AiSimulationGridProjection grid = AiSimulationGridProjection.For(rect, state);
+            return new AiSimulation3DProjection
+            {
+                Rect = rect,
+                OriginWorld = state.GraphOriginWorld(),
+                MetersPerPixel = grid.MetersPerPixel,
+                VisibleRadius = grid.VisibleRadius,
+                YawDegrees = state.Graph3DYaw,
+                PitchDegrees = state.Graph3DPitch,
+                VerticalScale = state.GraphVerticalScale
+            };
+        }
+
+        internal Vector2 WorldToScreen(Vector3 world)
+        {
+            return RelativeToScreen(world - OriginWorld);
+        }
+
+        internal Vector2 RelativeToScreen(Vector3 relativeWorld)
+        {
+            Vector3 projected = ProjectWorld(relativeWorld);
+            float pixelsPerMeter = 1f / Mathf.Max(0.001f, MetersPerPixel);
+            return new Vector2(
+                Rect.center.x + projected.x * pixelsPerMeter,
+                Rect.center.y - projected.y * pixelsPerMeter);
+        }
+
+        internal Vector2 DirectionToScreen(Vector3 direction, float pixels)
+        {
+            Vector2 a = RelativeToScreen(Vector3.zero);
+            Vector2 b = RelativeToScreen(direction);
+            Vector2 delta = b - a;
+            if (delta.sqrMagnitude < 0.001f)
+                return Vector2.zero;
+            return delta.normalized * pixels;
+        }
+
+        internal float Depth(Vector3 world)
+        {
+            return DepthRelative(world - OriginWorld);
+        }
+
+        private float DepthRelative(Vector3 relativeWorld)
+        {
+            Vector3 relative = RotateYaw(relativeWorld);
+            float pitch = PitchDegrees * Mathf.Deg2Rad;
+            return relative.z * Mathf.Cos(pitch) - relative.y * VerticalScale * Mathf.Sin(pitch);
+        }
+
+        internal Vector3 ProjectWorld(Vector3 relativeWorld)
+        {
+            Vector3 rotated = RotateYaw(relativeWorld);
+            float pitch = PitchDegrees * Mathf.Deg2Rad;
+            float y = rotated.z * Mathf.Sin(pitch) + rotated.y * VerticalScale * Mathf.Cos(pitch);
+            return new Vector3(rotated.x, y, DepthRelative(relativeWorld));
+        }
+
+        private Vector3 RotateYaw(Vector3 relativeWorld)
+        {
+            float yaw = YawDegrees * Mathf.Deg2Rad;
+            float sin = Mathf.Sin(yaw);
+            float cos = Mathf.Cos(yaw);
+            return new Vector3(
+                relativeWorld.x * cos - relativeWorld.z * sin,
+                relativeWorld.y,
+                relativeWorld.x * sin + relativeWorld.z * cos);
         }
     }
 }

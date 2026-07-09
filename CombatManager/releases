@@ -62,3 +62,10 @@
 - Added mouse-wheel graph zoom, toolbar zoom buttons, and Freecam drag-pan.
 - Expanded zoom range to 0.25x-8x while keeping markers, text, arrows, and line widths fixed in screen pixels.
 - Added Clean, Tactical, and Debug graph detail modes with label collision avoidance and a fixed-pixel scale bar.
+
+0.2.2
+- Added a Unity-rendered 3D tactical graph mode inside the fullscreen editor.
+- Dragging the graph now switches from top-down 2D into 3D/freecam panning; right-drag rotates the 3D view.
+- Added altitude pillars, altitude-aware trails, 3D intent markers, vertical scale, and Reset View controls.
+- Added Attack Run 1.0, Attack Run 2.0, and Attack Run 3.0 sandbox behaviour scaffolds with vanilla defaults and approximation notes.
+- Added aerial attack blueprint presets and an aerial attack scenario.
